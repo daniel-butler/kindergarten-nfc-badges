@@ -151,7 +151,10 @@ test.describe('720p layout', () => {
     await openScene(page, 'secret', 2);
     await phoneTap(request, PENGUIN.canonical_id);
     await expect(scene(page).locator('.digit.hidden')).toHaveCount(0, { timeout: 5000 });
-    const boxes = await scene(page).locator('.digit').evaluateAll((els) => els.map((e) => e.getBoundingClientRect().toJSON()));
+    // Layout boxes, not getBoundingClientRect: the reveal's scale animation would skew those.
+    const boxes = await scene(page).locator('.digit').evaluateAll((els) => els.map((e) => ({
+      top: e.offsetTop, left: e.offsetLeft, right: e.offsetLeft + e.offsetWidth,
+    })));
     expect(new Set(boxes.map((b) => Math.round(b.top))).size).toBe(1);
     expect(Math.min(...boxes.map((b) => b.left))).toBeGreaterThanOrEqual(0);
     expect(Math.max(...boxes.map((b) => b.right))).toBeLessThanOrEqual(1280);
