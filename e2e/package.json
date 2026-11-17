@@ -1,0 +1,15 @@
+{
+  "name": "badge-e2e",
+  "description": "End-to-end tests for the badge server and projector page",
+  "directories": {
+    "test": "tests"
+  },
+  "scripts": {
+    "test": "playwright test",
+    "install-browser": "playwright install chromium"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.65.1"
+  },
+  "private": true
+}

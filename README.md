@@ -7,6 +7,7 @@ This monorepo holds:
 |-----------|----------------------------------------------------------------------|
 | `server/` | Rust (axum) server: tap pipeline, ID matching, card registry, SSE, embedded web page |
 | `ios/`    | SwiftUI + Core NFC tap app *(step 4)*                                |
+| `e2e/`    | Playwright end-to-end tests: real server + real browser               |
 
 ## Run the server
 
@@ -98,6 +99,18 @@ registry where one badge would match two cards is rejected loudly.
 **Linking:** if the reader emits something none of the rules catch, turn on link mode, tap
 the badge on the device it's registered with, then on the other device within 5 seconds.
 The unknown ID becomes an alias of that card.
+
+## Automated tests
+
+```sh
+cd server && cargo test          # ID matching, registry, linking (unit)
+cd e2e && npm install && npm run install-browser   # once
+cd e2e && npm test               # starts the server on :8181 with a temp cards file
+```
+
+The e2e suite covers the HTTP API, SSE, keyboard-wedge capture (fast vs. slow typing, non-hex,
+focus), every scene, the presenter panel, and the 720p layout. CI runs fmt, clippy, unit tests
+and e2e on every push.
 
 ## Test with no hardware
 
