@@ -20,6 +20,56 @@ On startup it prints the cards file path and the Mac's LAN URLs (use the `en0` o
 `cards.json` lives next to the binary unless you pass `--cards`. Tip: pass `--cards` so
 `cargo clean` can't delete your registry.
 
+## Projector page
+
+Open `http://localhost:8080/` in Chrome on the Mac, click **Click to start** (unlocks sound,
+goes fullscreen). The USB reader types into this window; the page keeps focus on its own.
+
+Presenter keys always use **Option** so the reader can never trigger them:
+
+| Key | Action |
+|-----|--------|
+| ⌥1 | Setup scene |
+| ⌥2 | Free tap scene |
+| ⌥0 | Debug scene |
+| ⌥P | Presenter panel (also: click the invisible top-right corner) |
+| ⌥F | Fullscreen |
+| ⌥S | Skip / next (scenes that support it) |
+| ⌥M | Mute |
+| ⌥T | Typing test mode: accept hand-typed hex (normally ignored as too slow) |
+
+`#setup`, `#free`, `#debug` in the URL open that scene directly.
+
+### Scenes
+
+- **Setup**: tap a badge. Unknown → pick an animal and cardstock color → Save. Known → shows it,
+  with ✏️ Change / 🗑️ Delete. Click an animal in the bottom strip to edit it. Link mode is on
+  only while this scene is open. Duplicate badges get a full-screen red warning.
+- **Free tap**: known badge → giant emoji in its color, label, chime, confetti in its color.
+  Unknown → ACCESS DENIED + buzzer.
+- **Debug**: live log of every tap (source, raw_id, canonical_id, matched card) plus ignored
+  reader input.
+
+### Writing a scene
+
+Scenes live in `server/static/app.js`. Copy an existing one:
+
+```js
+Badge.registerScene({
+  id: 'myscene', name: '🎈 My scene', key: '3',   // ⌥3
+  onEnter(root, Badge) { /* render into root (full-screen) */ },
+  onTap(ev) { /* ev.card is null when unknown; ev.repeat filtered unless acceptRepeats */ },
+  onCards(cards) {}, onSkip() {}, onExit() {},
+});
+```
+
+Helpers on `Badge`: `cards`, `sound.chime() / buzzer() / silly() / fanfare()`,
+`confetti.burst(colors) / rain(colors)`, `later(fn, ms)` (auto-cancelled on scene change),
+`banner(text)`, `saveCards(cards)`, `ANIMALS`, `COLORS`, `colorName(hex)`.
+
+In a debug build (`cargo run`) static files are read from disk, so edit `app.js` and refresh.
+A release build embeds them in the binary.
+
 ## API
 
 | Method | Path             | Body / result |
@@ -61,3 +111,7 @@ curl localhost:8080/tap -H 'content-type: application/json' -d '{"id":"04A1B2C3D
 curl localhost:8080/tap -H 'content-type: application/json' -d '{"id":"C3B2A104","source":"reader"}'   # truncated + reversed → 🐧
 curl localhost:8080/tap -H 'content-type: application/json' -d '{"id":"DEADBEEF","source":"reader"}'   # unknown → card: null
 ```
+
+On the page: press **⌥T** (typing test mode), type `c3b2a104` and Enter: the Penguin appears,
+the same as the reader would produce. Press ⌥T again to turn it off: hand typing is ignored
+again, which is how it should be in class. Watch everything in **⌥0 Debug**.

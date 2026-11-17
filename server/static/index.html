@@ -1,4 +1,25 @@
 <!doctype html>
-<meta charset="utf-8">
-<title>Badge Server</title>
-<p>Server is running. The projector page arrives in step 2.</p>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Badge Tap</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <input id="wedge" aria-hidden="true" autocomplete="off" autocapitalize="off" spellcheck="false">
+  <main id="scene" class="scene"></main>
+  <canvas id="confetti"></canvas>
+  <div id="banner" hidden></div>
+  <button id="panel-hotspot" aria-label="Presenter panel"></button>
+  <aside id="panel" hidden></aside>
+  <div id="start">
+    <div class="start-box">
+      <div class="start-emoji">🔊</div>
+      <div>Click to start</div>
+      <div class="start-hint">Option+P: presenter panel</div>
+    </div>
+  </div>
+  <script src="app.js"></script>
+</body>
+</html>
