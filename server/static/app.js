@@ -121,11 +121,13 @@ const Sound = (() => {
         tone(f * 2, i * 0.11, 0.3, { type: 'triangle', gain: 0.06 });
       });
     },
+    /** Silly "access denied": two buzzy bwomps and a boing. */
     buzzer() {
-      [0, 0.32].forEach((s) => {
-        tone(110, s, 0.28, { type: 'square', gain: 0.22 });
-        tone(116, s, 0.28, { type: 'sawtooth', gain: 0.15 });
-      });
+      tone(220, 0, 0.3, { type: 'square', gain: 0.18, slideTo: 140 });
+      tone(226, 0, 0.3, { type: 'sawtooth', gain: 0.12, slideTo: 144 });
+      tone(200, 0.36, 0.45, { type: 'square', gain: 0.18, slideTo: 90, vibrato: 10 });
+      tone(206, 0.36, 0.45, { type: 'sawtooth', gain: 0.12, slideTo: 92 });
+      tone(700, 0.9, 0.35, { type: 'sine', gain: 0.2, slideTo: 160, vibrato: 30 });
     },
     silly() {
       tone(392, 0, 0.3, { type: 'sawtooth', gain: 0.18, slideTo: 370 });
@@ -140,6 +142,47 @@ const Sound = (() => {
         tone(f, s, 0.18, { type: 'triangle', gain: 0.2 });
       }
       for (const f of [523, 659, 784, 1047]) tone(f, 1.0, 1.2, { type: 'triangle', gain: 0.14, vibrato: 4 });
+    },
+  };
+})();
+
+// ===================================================================
+// Voice (speechSynthesis with the Mac's built-in offline voices)
+// ===================================================================
+
+const Voice = (() => {
+  const supported = 'speechSynthesis' in window;
+  const history = [];
+  let enabled = true;
+  let voice = null;
+
+  function pickVoice() {
+    const local = speechSynthesis.getVoices().filter((v) => v.localService && v.lang.startsWith('en'));
+    voice = local.find((v) => /Samantha|Karen|Daniel/.test(v.name)) || local[0] || null;
+  }
+  if (supported) {
+    pickVoice();
+    speechSynthesis.addEventListener('voiceschanged', pickVoice);
+  }
+
+  return {
+    history,
+    get enabled() { return enabled; },
+    set enabled(value) {
+      enabled = value;
+      if (!value && supported) speechSynthesis.cancel();
+    },
+    /** Speak a short phrase. `queue` keeps earlier phrases instead of cutting them off. */
+    say(text, { queue = false, rate = 0.95, pitch = 1.25 } = {}) {
+      history.push(text);
+      if (history.length > 50) history.shift();
+      if (!enabled || !supported || Sound.muted) return;
+      if (!queue) speechSynthesis.cancel();
+      const u = new SpeechSynthesisUtterance(text);
+      if (voice) u.voice = voice;
+      u.rate = rate;
+      u.pitch = pitch;
+      speechSynthesis.speak(u);
     },
   };
 })();
@@ -252,6 +295,7 @@ const Badge = (() => {
     ANIMALS,
     COLORS,
     sound: Sound,
+    voice: Voice,
     confetti: Confetti,
     get connected() { return connected; },
     get current() { return current; },
@@ -259,7 +303,8 @@ const Badge = (() => {
 
     /**
      * Add a scene: { id, name, key, onEnter(root, Badge), onTap(event), onExit(),
-     * onCards(cards), onSkip(), onLog(entry), acceptRepeats, linkMode }.
+     * onCards(cards), onSkip(), skipLabel, actions: [{ label, run }], onLog(entry),
+     * acceptRepeats, linkMode, kid }. `kid: true` uses the bright sky theme.
      * `key` is the digit pressed with Option to switch to it.
      */
     registerScene(scene) {
@@ -275,6 +320,7 @@ const Badge = (() => {
       sceneTimers = new Set();
       root.replaceChildren();
       root.className = `scene scene-${next.id}`;
+      document.body.classList.toggle('kid-mode', !!next.kid);
       current = next;
       history.replaceState(null, '', `#${next.id}`);
       api.setLinkMode(!!next.linkMode);
@@ -498,15 +544,18 @@ const Panel = (() => {
       el('h2', {}, 'Scenes'),
       ...Badge.scenes.map((s) => button(s.name, `⌥${s.key}`, () => Badge.show(s.id), s === current)),
       el('h2', {}, 'Controls'),
-      current?.onSkip ? button('Skip / next', '⌥S', () => current.onSkip()) : null,
+      current?.onSkip ? button(current.skipLabel || 'Skip / next', '⌥S', () => current.onSkip()) : null,
+      ...(current?.actions || []).map((a) => button(a.label, null, a.run)),
       button('Fullscreen', '⌥F', fullscreen, !!document.fullscreenElement),
       button(Sound.muted ? 'Sound: OFF' : 'Sound: on', '⌥M', () => (Sound.muted = !Sound.muted), Sound.muted),
+      button(Voice.enabled ? 'Voice: on' : 'Voice: OFF', '⌥V', () => (Voice.enabled = !Voice.enabled), !Voice.enabled),
       button(Reader.testMode ? 'Typing test mode: ON' : 'Typing test mode: off', '⌥T', () => Reader.toggleTestMode(), Reader.testMode),
       el('h2', {}, 'Test'),
       button('Chime', null, () => Sound.chime()),
       button('Buzzer', null, () => Sound.buzzer()),
       button('Silly buzzer', null, () => Sound.silly()),
       button('Fanfare', null, () => Sound.fanfare()),
+      button('Voice', null, () => Voice.say('Hello, zookeepers!')),
       button('Confetti', null, () => Confetti.burst()),
       el('h2', {}, 'Status'),
       el('div', {}, `${Badge.connected ? '🟢 Connected' : '🔴 Disconnected'} · ${Badge.cards.length} cards`),
@@ -525,6 +574,7 @@ const Panel = (() => {
     else if (code === 'KeyF') fullscreen();
     else if (code === 'KeyS') Badge.current?.onSkip?.();
     else if (code === 'KeyM') Sound.muted = !Sound.muted;
+    else if (code === 'KeyV') Voice.enabled = !Voice.enabled;
     else if (code === 'KeyT') Reader.toggleTestMode();
     else handled = false;
     if (handled) {
@@ -725,8 +775,8 @@ Badge.registerScene((() => {
 // ===================================================================
 
 Badge.registerScene((() => {
-  const FIRST_DIGIT_MS = 400;
-  const DIGIT_MS = 220;
+  const FIRST_DIGIT_MS = 700;
+  const DIGIT_MS = 450;
   let root;
   let timers = [];
 
@@ -743,10 +793,12 @@ Badge.registerScene((() => {
     root.replaceChildren(
       el('div', { class: 'title' }, '🤫 The secret number is…'),
       el('div', { class: 'digits', style: `--n:${chars.length}` }, digits));
+    Voice.say('The secret number is');
     timers = digits.map((d, i) => Badge.later(() => {
       d.classList.remove('hidden');
       d.classList.add('pop');
       Sound.tick(i);
+      Voice.say(chars[i] === '0' ? 'zero' : chars[i], { queue: true, rate: 1.1 });
     }, FIRST_DIGIT_MS + i * DIGIT_MS));
     timers.push(Badge.later(() => Sound.chime(), FIRST_DIGIT_MS + chars.length * DIGIT_MS + 100));
   }
@@ -755,6 +807,7 @@ Badge.registerScene((() => {
     id: 'secret',
     name: '🔢 Secret Number',
     key: '2',
+    kid: true,
     acceptRepeats: true,
     onEnter(r) {
       root = r;
@@ -762,6 +815,517 @@ Badge.registerScene((() => {
       idle();
     },
     onTap: (ev) => reveal(ev.raw_id),
+  };
+})());
+
+// ===================================================================
+// Scene: Zoo Gate
+// ===================================================================
+
+/** A round badge-colored token with the card's emoji, sized in vmin. */
+function ring(card, size, attrs = {}) {
+  return el('div', {
+    class: 'ring',
+    style: `background:${card.color.hex};width:${size}vmin;height:${size}vmin;font-size:${size * 0.62}vmin`,
+    title: card.label,
+    'data-id': card.canonical_id,
+    ...attrs,
+  }, card.emoji);
+}
+
+function shuffle(list) {
+  const a = [...list];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+Badge.registerScene((() => {
+  const STORE_KEY = 'zoo-gate-v1';
+  const WALK_MS = 2600;
+  const AUTO_OPEN_DELAY_MS = 2200;
+  const PARADE_STAGGER_MS = 350;
+  const PARADE_CROSS_MS = 4500;
+
+  let root;
+  let state = load();
+  let els = {};
+  let slots = [];
+  let walking = 0;
+  let generation = 0;
+  let deniedTimer;
+  let hintTimer;
+
+  function load() {
+    try {
+      const s = JSON.parse(localStorage.getItem(STORE_KEY));
+      if (s && Array.isArray(s.checkedIn)) return { checkedIn: s.checkedIn, open: !!s.open };
+    } catch {
+      /* private window or corrupt value: start fresh */
+    }
+    return { checkedIn: [], open: false };
+  }
+
+  function save() {
+    try {
+      localStorage.setItem(STORE_KEY, JSON.stringify(state));
+    } catch {
+      /* not fatal: check-ins just won't survive a reload */
+    }
+  }
+
+  const cardById = (id) => Badge.cards.find((c) => c.canonical_id === id);
+  // Stored ids may include cards not loaded yet (or deleted); only display the ones we know.
+  const insideCards = () => state.checkedIn.map(cardById).filter(Boolean);
+  const colors = () => Badge.cards.map((c) => c.color.hex);
+
+  function counts() {
+    const real = Badge.cards.filter((c) => !c.trick);
+    const inside = new Set(state.checkedIn);
+    return { done: real.filter((c) => inside.has(c.canonical_id)).length, total: real.length };
+  }
+
+  function updateCounter() {
+    const { done, total } = counts();
+    els.counter.replaceChildren(total
+      ? el('span', {}, el('b', {}, done), ` of ${total} zookeepers checked in`)
+      : 'No zookeepers registered yet');
+    els.progress.style.width = `${total ? (100 * done) / total : 0}%`;
+  }
+
+  function hint(text) {
+    Badge.cancel(hintTimer);
+    els.arrive.replaceChildren();
+    els.hint.replaceChildren(el('div', { class: 'welcome' }, text));
+  }
+
+  function idleHint() {
+    Badge.cancel(hintTimer);
+    els.arrive.replaceChildren(el('div', { class: 'huge-emoji-sm pulse' }, '👆'));
+    els.hint.replaceChildren('Tap your badge!');
+  }
+
+  function filledSlot(card) {
+    return el('div', {
+      class: 'zoo-slot filled',
+      style: `background:${card.color.hex}`,
+      'data-id': card.canonical_id,
+      title: card.label,
+    }, card.emoji);
+  }
+
+  function renderGate() {
+    generation++;
+    walking = 0;
+    root.className = 'scene scene-zoo';
+    const inside = insideCards();
+    slots = Badge.cards.map((_, i) => (inside[i] ? filledSlot(inside[i]) : el('div', { class: 'zoo-slot empty' })));
+    els = {
+      counter: el('div', { class: 'zoo-counter' }),
+      progress: el('div', { class: 'zoo-progress-fill' }),
+      arrive: el('div', { class: 'zoo-arrive' }),
+      hint: el('div', { class: 'zoo-hint' }),
+      gate: el('div', { class: 'zoo-gate' },
+        el('div', { class: 'gate-sign' }, '🦒 ZOO 🐘'),
+        el('div', { class: 'gate-frame' },
+          el('div', { class: 'door left' }),
+          el('div', { class: 'door right' }),
+          el('div', { class: 'gate-lock' }, '🔒'))),
+      grid: el('div', { class: 'zoo-grid' }, slots),
+    };
+    els.inside = el('div', { class: 'zoo-inside' }, els.grid);
+    root.replaceChildren(
+      el('div', { class: 'zoo-top' }, els.counter, el('div', { class: 'zoo-progress' }, els.progress)),
+      el('div', { class: 'zoo-stage' }, el('div', { class: 'zoo-outside' }, els.arrive, els.hint), els.gate, els.inside));
+    updateCounter();
+    idleHint();
+    requestAnimationFrame(layoutSlots);
+  }
+
+  /** Pick the column count that gives the biggest square slots in the zoo area. */
+  function layoutSlots() {
+    if (!els.inside?.isConnected || !slots.length) return;
+    const style = getComputedStyle(els.inside);
+    const W = els.inside.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
+    const H = els.inside.clientHeight - parseFloat(style.paddingTop) - parseFloat(style.paddingBottom);
+    const gap = Math.min(innerWidth, innerHeight) * 0.012;
+    let best = { cols: 1, size: 0 };
+    for (let cols = 1; cols <= slots.length; cols++) {
+      const rows = Math.ceil(slots.length / cols);
+      const size = Math.min((W - gap * (cols - 1)) / cols, (H - gap * (rows - 1)) / rows);
+      if (size > best.size) best = { cols, size };
+    }
+    const size = Math.floor(Math.min(best.size, Math.min(innerWidth, innerHeight) * 0.2));
+    els.grid.style.gridTemplateColumns = `repeat(${best.cols}, ${size}px)`;
+    els.grid.style.setProperty('--slot', `${size}px`);
+  }
+
+  function center(rect, size) {
+    return [rect.left + rect.width / 2 - size / 2, rect.top + rect.height / 2 - size / 2];
+  }
+
+  function walkIn(card, index) {
+    const target = slots[index];
+    const gen = generation;
+    const size = target.getBoundingClientRect().width;
+    const from = els.arrive.getBoundingClientRect();
+    const [x0, y0] = center(from, size);
+    const big = Math.min(2.2, (from.height * 0.95) / size);
+    const [x1, y1] = center(els.gate.getBoundingClientRect(), size);
+    const [x2, y2] = center(target.getBoundingClientRect(), size);
+    const walker = el('div', {
+      class: 'walker',
+      style: `width:${size}px;height:${size}px;font-size:${size * 0.62}px`,
+    }, el('div', { class: 'bob ring', style: `background:${card.color.hex}` }, card.emoji));
+    root.append(walker);
+    hint(`Welcome, ${card.label} keeper!`);
+    Voice.say(`Welcome, ${card.label} keeper!`);
+    hintTimer = Badge.later(idleHint, WALK_MS + 800);
+    walking++;
+    els.gate.classList.add('ajar');
+    Sound.chime();
+    Confetti.burst([card.color.hex], { x: (from.left + from.width / 2) / innerWidth, y: 0.5 });
+
+    walker.animate([
+      { transform: `translate(${x0}px, ${y0}px) scale(${big})`, offset: 0 },
+      { transform: `translate(${x0}px, ${y0}px) scale(${big})`, offset: 0.2 },
+      { transform: `translate(${x1}px, ${y1}px) scale(${(big + 1) / 2})`, offset: 0.55 },
+      { transform: `translate(${x2}px, ${y2}px) scale(1)`, offset: 1 },
+    ], { duration: WALK_MS, easing: 'ease-in-out', fill: 'forwards' }).finished.then(() => {
+      walker.remove();
+      if (gen !== generation) return;
+      const filled = filledSlot(card);
+      filled.classList.add('pop');
+      target.replaceWith(filled);
+      slots[index] = filled;
+      if (--walking === 0) els.gate.classList.remove('ajar');
+    }).catch(() => {});
+  }
+
+  function denied() {
+    Sound.buzzer();
+    Voice.say('Access denied!', { pitch: 1.6 });
+    Badge.cancel(deniedTimer);
+    root.querySelector('.zoo-denied')?.remove();
+    root.append(el('div', { class: 'zoo-denied' },
+      el('div', { class: 'huge-emoji wobble' }, '🙅'),
+      el('div', { class: 'title shake' }, 'ACCESS DENIED'),
+      el('div', { class: 'subtitle' }, 'That badge is not a zoo badge!')));
+    deniedTimer = Badge.later(() => root.querySelector('.zoo-denied')?.remove(), 2500);
+  }
+
+  function openGate() {
+    if (state.open) return;
+    state.open = true;
+    save();
+    els.gate?.classList.remove('ajar');
+    els.gate?.classList.add('open');
+    Sound.fanfare();
+    Voice.say('Everyone is here! Open the gate!');
+    Confetti.rain(colors());
+    Badge.later(parade, 1600);
+  }
+
+  function parade() {
+    root.classList.add('finale');
+    const lane = el('div', { class: 'parade' });
+    root.append(lane);
+    const vmin = Math.min(innerWidth, innerHeight) / 100;
+    const cards = Badge.cards;
+    cards.forEach((card, i) => {
+      const marcher = el('div', { class: 'marcher' }, el('div', { class: 'bob-hop' }, ring(card, 16)));
+      lane.append(marcher);
+      const y = (i % 2 ? 6 : -22) * vmin;
+      marcher.animate([
+        { transform: `translate(${-20 * vmin}px, ${y}px)` },
+        { transform: `translate(${innerWidth + 4 * vmin}px, ${y}px)` },
+      ], { duration: PARADE_CROSS_MS, delay: i * PARADE_STAGGER_MS, fill: 'both' });
+    });
+    Badge.later(() => showFinale(true), Math.max(cards.length - 1, 0) * PARADE_STAGGER_MS + PARADE_CROSS_MS);
+  }
+
+  function showFinale(celebrate) {
+    root.className = 'scene scene-zoo finale';
+    root.replaceChildren(el('div', { class: 'zoo-finale' },
+      el('div', { class: 'huge-emoji-sm pop' }, '🏆'),
+      el('div', { class: 'title finale-title pop' }, 'Congratulations, Official Zookeepers!'),
+      el('div', { class: 'finale-animals' }, Badge.cards.map((c) => ring(c, 10)))));
+    if (celebrate) {
+      Sound.fanfare();
+      Voice.say('Congratulations, Official Zookeepers!');
+      Confetti.rain(colors(), { count: 450 });
+    }
+  }
+
+  function render() {
+    if (state.open) showFinale(false);
+    else renderGate();
+  }
+
+  function reset() {
+    state = { checkedIn: [], open: false };
+    save();
+    Badge.show('zoo');
+  }
+
+  function bounce(node) {
+    if (!node) return;
+    node.classList.remove('pop');
+    void node.offsetWidth;
+    node.classList.add('pop');
+  }
+
+  return {
+    id: 'zoo',
+    name: '🦁 Zoo Gate',
+    key: '3',
+    kid: true,
+    onEnter(r) {
+      root = r;
+      state = load();
+      render();
+      addEventListener('resize', layoutSlots);
+      const { done, total } = counts();
+      if (!state.open && total && done === total) Badge.later(openGate, AUTO_OPEN_DELAY_MS);
+    },
+    onExit() {
+      removeEventListener('resize', layoutSlots);
+      generation++;
+    },
+    onCards() {
+      if (!state.open && !root.classList.contains('finale')) render();
+    },
+    onSkip: openGate,
+    skipLabel: '🔓 Open the gate now',
+    actions: [{ label: '🔄 Reset check-ins', run: reset }],
+    onTap(ev) {
+      if (!ev.card) return denied();
+      const card = ev.card;
+      if (state.open) {
+        Sound.chime();
+        Confetti.burst([card.color.hex]);
+        bounce(root.querySelector(`.finale-animals [data-id="${card.canonical_id}"]`));
+        return;
+      }
+      if (state.checkedIn.includes(card.canonical_id)) {
+        Sound.tick(4);
+        bounce(slots.find((s) => s.dataset.id === card.canonical_id));
+        hint(`${card.emoji} is already inside!`);
+        hintTimer = Badge.later(idleHint, 2000);
+        return;
+      }
+      state.checkedIn.push(card.canonical_id);
+      save();
+      walkIn(card, insideCards().length - 1);
+      updateCounter();
+      const { done, total } = counts();
+      if (total && done === total) Badge.later(openGate, AUTO_OPEN_DELAY_MS);
+    },
+  };
+})());
+
+// ===================================================================
+// Scene: The List
+// ===================================================================
+
+Badge.registerScene((() => {
+  const SCAN_ROW_MS = 70;
+  let root;
+  let hitId = null;
+  let lookup = null; // { raw, card, searching }
+  let scanTimers = [];
+
+  function lookupLine() {
+    if (!lookup) return el('div', { class: 'list-lookup' }, 'Tap a badge: the computer looks up its secret number!');
+    const raw = lookup.raw.toUpperCase();
+    let result;
+    if (lookup.searching) result = el('span', { class: 'searching' }, 'looking… 🤔');
+    else if (lookup.card) result = [el('span', { class: 'em' }, lookup.card.emoji), ` ${lookup.card.label}!`];
+    else result = '❌ Not on the list!';
+    return el('div', { class: `list-lookup ${lookup.searching ? '' : 'pop'}` },
+      el('span', { class: 'mono' }, `🔍 ${raw}`), ' → ', result);
+  }
+
+  function render() {
+    const cards = Badge.cards;
+    const cols = cards.length <= 10 ? 1 : cards.length <= 26 ? 2 : 3;
+    const rows = Math.max(1, Math.ceil(cards.length / cols));
+    root.className = 'scene scene-list';
+    root.replaceChildren(
+      el('div', { class: 'title list-title' }, '📋 The List'),
+      lookupLine(),
+      cards.length
+        ? el('div', { class: 'list-grid', 'data-rows': rows }, cards.map((c) => el('div', {
+          class: `list-row ${c.canonical_id === hitId ? 'hit' : ''}`,
+          'data-id': c.canonical_id,
+        },
+        el('span', { class: 'list-num mono' }, c.canonical_id),
+        el('span', { class: 'em' }, c.emoji),
+        el('span', { class: 'list-swatch', style: `background:${c.color.hex}`, title: c.color.name }))))
+        : el('div', { class: 'subtitle' }, 'No badges registered yet'));
+    fit();
+  }
+
+  /** Size rows to fill whatever height is left below the lookup line. */
+  function fit() {
+    const grid = root.querySelector('.list-grid');
+    if (!grid) return;
+    const rows = Number(grid.dataset.rows);
+    const vmin = Math.min(innerWidth, innerHeight) / 100;
+    const avail = innerHeight - grid.getBoundingClientRect().top - 3 * vmin;
+    const h = Math.max(2 * vmin, Math.min(9 * vmin, (avail - 0.6 * vmin * (rows - 1)) / rows));
+    grid.style.gridTemplateRows = `repeat(${rows}, ${h}px)`;
+    grid.style.setProperty('--row', `${h}px`);
+  }
+
+  return {
+    id: 'list',
+    name: '📋 The List',
+    key: '4',
+    kid: true,
+    acceptRepeats: true,
+    onEnter(r) {
+      root = r;
+      hitId = null;
+      lookup = null;
+      render();
+      addEventListener('resize', fit);
+    },
+    onExit() {
+      removeEventListener('resize', fit);
+    },
+    onCards: () => render(),
+    onTap(ev) {
+      for (const t of scanTimers) Badge.cancel(t);
+      lookup = { raw: ev.raw_id, card: ev.card, searching: true };
+      hitId = null;
+      render();
+      // Visibly run down the list until the matching row (or the end), then show the result.
+      const rows = [...root.querySelectorAll('.list-row')];
+      const stop = ev.card ? rows.findIndex((r) => r.dataset.id === ev.card.canonical_id) : rows.length - 1;
+      scanTimers = rows.slice(0, stop + 1).map((row, i) => Badge.later(() => {
+        row.classList.add('scan');
+        Sound.tick(i % 8);
+        Badge.later(() => row.classList.remove('scan'), SCAN_ROW_MS * 2);
+      }, i * SCAN_ROW_MS));
+      scanTimers.push(Badge.later(() => {
+        lookup.searching = false;
+        hitId = ev.card?.canonical_id ?? null;
+        render();
+        if (ev.card) {
+          Sound.chime();
+          Voice.say(`Found it! ${ev.card.label}!`);
+        } else {
+          Sound.buzzer();
+          Voice.say('Not on the list!', { pitch: 1.6 });
+        }
+      }, (stop + 1) * SCAN_ROW_MS + 150));
+    },
+  };
+})());
+
+// ===================================================================
+// Scene: Who has the ___?
+// ===================================================================
+
+Badge.registerScene((() => {
+  const NEXT_AFTER_CORRECT_MS = 4000;
+  const NOPE_MS = 1800;
+  let root;
+  let target = null;
+  let bag = [];
+  let celebrating = false;
+  let timer;
+
+  function pickNext() {
+    const cards = Badge.cards;
+    const previous = target?.canonical_id;
+    target = null;
+    if (!cards.length) return;
+    for (let tries = 0; tries < 2 && !target; tries++) {
+      if (!bag.length) {
+        const ids = cards.map((c) => c.canonical_id);
+        bag = shuffle(cards.length > 1 ? ids.filter((id) => id !== previous) : ids);
+      }
+      while (bag.length && !target) {
+        const id = bag.pop();
+        target = cards.find((c) => c.canonical_id === id) || null;
+      }
+    }
+  }
+
+  function ask() {
+    celebrating = false;
+    root.className = 'scene scene-who';
+    if (!target && Badge.cards.length) pickNext();
+    if (!target) {
+      root.replaceChildren(el('div', { class: 'title' }, 'Register some badges first!'));
+      return;
+    }
+    root.replaceChildren(
+      el('div', { class: 'title' }, 'Who has the'),
+      el('div', { class: 'who-target', 'data-id': target.canonical_id }, cardCircle(target)),
+      el('div', { class: 'big-label' }, `${target.label}?`));
+  }
+
+  function askAloud() {
+    ask();
+    if (target) Voice.say(`Who has the ${target.label}?`);
+  }
+
+  function next() {
+    Badge.cancel(timer);
+    pickNext();
+    askAloud();
+  }
+
+  return {
+    id: 'who',
+    name: '❓ Who has the ___?',
+    key: '5',
+    kid: true,
+    onEnter(r) {
+      root = r;
+      target = null;
+      next();
+    },
+    onSkip: next,
+    skipLabel: '⏭️ Next animal',
+    onCards() {
+      if (celebrating) return;
+      const fresh = target && Badge.cards.find((c) => c.canonical_id === target.canonical_id);
+      if (fresh) {
+        target = fresh;
+        ask();
+      } else next();
+    },
+    onTap(ev) {
+      if (celebrating || !target) return;
+      Badge.cancel(timer);
+      if (ev.card?.canonical_id === target.canonical_id) {
+        celebrating = true;
+        root.className = 'scene scene-who';
+        root.replaceChildren(
+          el('div', { class: 'title pop' }, 'Yes! 🎉'),
+          cardCircle(target),
+          el('div', { class: 'big-label' }, `It's the ${target.label}!`));
+        Sound.chime();
+        Voice.say(`Yes! It's the ${target.label}!`);
+        Confetti.burst([target.color.hex], { y: 0.45, count: 260 });
+        timer = Badge.later(next, NEXT_AFTER_CORRECT_MS);
+        return;
+      }
+      Sound.silly();
+      Voice.say(ev.card ? `Nope! That's the ${ev.card.label}!` : 'Nope! Not a zoo badge!', { pitch: 1.5 });
+      root.className = 'scene scene-who nope';
+      root.replaceChildren(
+        el('div', { class: 'title shake' }, 'Nope! 🙈'),
+        ev.card ? ring(ev.card, 30) : el('div', { class: 'huge-emoji-sm' }, '❓'),
+        el('div', { class: 'big-label' }, ev.card ? `That's the ${ev.card.label}` : 'Not a zoo badge!'));
+      timer = Badge.later(ask, NOPE_MS);
+    },
   };
 })());
 

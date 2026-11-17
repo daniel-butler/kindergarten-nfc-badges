@@ -1,5 +1,5 @@
 const { test, expect } = require('@playwright/test');
-const { PENGUIN, LION, setCards, getCards, phoneTap, setLinkMode, openScene, readerScan, scene } = require('./helpers');
+const { PENGUIN, LION, spoken, setCards, getCards, phoneTap, setLinkMode, openScene, readerScan, scene } = require('./helpers');
 
 test.beforeEach(async ({ request }) => {
   await setLinkMode(request, false);
@@ -13,17 +13,18 @@ test.describe('Secret Number', () => {
     await phoneTap(request, 'DEADBEEF');
     await expect(scene(page).locator('.digit')).toHaveCount(8);
     await expect(scene(page).locator('.digit.hidden')).not.toHaveCount(0);
-    await expect(scene(page).locator('.digit.hidden')).toHaveCount(0, { timeout: 4000 });
+    await expect(scene(page).locator('.digit.hidden')).toHaveCount(0, { timeout: 10000 });
     await expect(scene(page).locator('.digits')).toHaveText('DEADBEEF');
+    expect(await spoken(page)).toEqual(expect.arrayContaining(['The secret number is', 'D', 'E', 'A', 'B', 'F']));
 
     await phoneTap(request, PENGUIN.canonical_id);
-    await expect(scene(page).locator('.digits')).toHaveText('04A1B2C3D4E5F6', { timeout: 5000 });
+    await expect(scene(page).locator('.digits')).toHaveText('04A1B2C3D4E5F6', { timeout: 10000 });
   });
 
   test('shows the raw id as the reader typed it', async ({ page }) => {
     await openScene(page, 'secret', 2);
     await readerScan(page, 'c3b2a104');
-    await expect(scene(page).locator('.digits')).toHaveText('C3B2A104', { timeout: 4000 });
+    await expect(scene(page).locator('.digits')).toHaveText('C3B2A104', { timeout: 10000 });
   });
 });
 
@@ -150,7 +151,7 @@ test.describe('720p layout', () => {
   test('a full 14-digit secret number fits on one line', async ({ page, request }) => {
     await openScene(page, 'secret', 2);
     await phoneTap(request, PENGUIN.canonical_id);
-    await expect(scene(page).locator('.digit.hidden')).toHaveCount(0, { timeout: 5000 });
+    await expect(scene(page).locator('.digit.hidden')).toHaveCount(0, { timeout: 12000 });
     // Layout boxes, not getBoundingClientRect: the reveal's scale animation would skew those.
     const boxes = await scene(page).locator('.digit').evaluateAll((els) => els.map((e) => ({
       top: e.offsetTop, left: e.offsetLeft, right: e.offsetLeft + e.offsetWidth,
@@ -165,7 +166,7 @@ test('no page errors across scenes', async ({ page, request }) => {
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
   await openScene(page, 'setup', 2);
-  for (const key of ['Alt+2', 'Alt+0', 'Alt+1', 'Alt+2']) {
+  for (const key of ['Alt+2', 'Alt+3', 'Alt+4', 'Alt+5', 'Alt+0', 'Alt+1']) {
     await page.keyboard.press(key);
     await phoneTap(request, PENGUIN.canonical_id);
     await phoneTap(request, 'DEADBEEF');
