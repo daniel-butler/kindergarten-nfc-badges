@@ -1,0 +1,6 @@
+server/target/
+cards.json
+*.json.tmp
+.DS_Store
+xcuserdata/
+DerivedData/
