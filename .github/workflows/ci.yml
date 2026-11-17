@@ -33,3 +33,18 @@ jobs:
           npm ci
           npx playwright install --with-deps chromium
           npx playwright test
+
+  ios:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: TapClient checks
+        working-directory: ios
+        run: |
+          swiftc ClassroomZoo/TapClient.swift Tests/main.swift -o "$RUNNER_TEMP/tapcheck"
+          "$RUNNER_TEMP/tapcheck"
+      - name: Build app (simulator, unsigned)
+        working-directory: ios
+        run: |
+          xcodebuild -project ClassroomZoo.xcodeproj -scheme ClassroomZoo \
+            -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build

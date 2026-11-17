@@ -6,7 +6,7 @@ The Classroom Zoo is locked, and only zookeepers with a badge can get in. Kids t
 | Path      | What                                                                  |
 |-----------|-----------------------------------------------------------------------|
 | `server/` | Rust (axum) server: tap pipeline, ID matching, card registry, SSE, embedded web page |
-| `ios/`    | SwiftUI + Core NFC tap app *(step 4)*                                 |
+| `ios/`    | "Zoo Tap": SwiftUI + Core NFC app that reads badge UIDs and POSTs them |
 | `e2e/`    | Playwright end-to-end tests: real server + real browser               |
 
 ## Run the server
@@ -33,6 +33,30 @@ deletes), so pass `--cards` for the real registry.
 
 The projector page uses `http://localhost:8080/` on the Mac, so it works even without the hotspot.
 Speech uses the Mac's built-in voices, which work offline.
+
+## iPhone app (Zoo Tap)
+
+1. Open `ios/ClassroomZoo.xcodeproj` in Xcode. Signing is preset to team `K7T7J4BD4W` with
+   automatic signing and bundle ID `com.rekuro.ClassroomZoo` (change both under
+   *Signing & Capabilities* if needed). Xcode registers the App ID with the
+   **NFC Tag Reading** capability on first build.
+2. Plug in the iPhone, pick it as the run destination, press **Run**. First time on the phone:
+   Settings → Privacy & Security → **Developer Mode** on, and trust the developer certificate
+   (Settings → General → VPN & Device Management).
+3. In the app: enter the server URL printed by the server (e.g. `http://172.20.10.2:8080`), tap
+   **Test connection** (allow Local Network access when asked) → "✅ Connected: N badges".
+4. Tap **Start Scanning** and hold badges to the top of the phone one after another. Each read
+   buzzes, POSTs `{id, source: "phone"}`, shows the animal, and keeps scanning. iOS ends an NFC
+   session after about a minute; tap Start again.
+
+A badge left on the phone isn't re-sent within 2 seconds. Without a phone, check the networking
+code on the Mac:
+
+```sh
+cd ios
+swiftc ClassroomZoo/TapClient.swift Tests/main.swift -o /tmp/tapcheck && /tmp/tapcheck
+BADGE_SERVER=localhost:8080 /tmp/tapcheck      # also sends a real tap to a running server
+```
 
 ## Projector page
 
@@ -151,6 +175,8 @@ cd e2e && npm install && npm run install-browser     # once
 cd e2e && npm test                                   # starts the server on :8181 with a fresh cards file
 ```
 
+CI also builds the iOS app for the simulator and runs the TapClient checks on macOS.
+
 The e2e suite covers the HTTP API, SSE, keyboard-wedge capture, every scene (including voice
 lines), the presenter panel, and 720p layouts with 25 badges. CI runs fmt, clippy, unit tests and
 e2e on every push.
@@ -174,6 +200,8 @@ Press ⌥T again to turn it off. Watch everything in **⌥0 Debug**.
 
 **The night before**
 - [ ] `cargo build --release` and copy `server/target/release/badge-server` somewhere safe.
+- [ ] Install Zoo Tap on the iPhone from Xcode (development builds stay valid for days, but
+      reinstall if it won't open).
 - [ ] Register every badge in Setup (⌥1) with the **phone**; set 🎭 on the three trick badges.
 - [ ] Tap every badge on the **USB reader** in Setup. Any that show the picker instead of the
       card: tap on the phone, then the reader within 5 s to link them.
@@ -185,7 +213,8 @@ Press ⌥T again to turn it off. Watch everything in **⌥0 Debug**.
 - [ ] Chrome → `http://localhost:8080/#zoo`, **Click to start**, fullscreen (⌥F).
 - [ ] Projector volume up; ⌥P → Chime and Voice buttons play.
 - [ ] ⌥P status shows 🟢 Connected and the right card count.
-- [ ] Phone app scanning: one test tap shows in ⌥0 Debug as 📱 phone.
+- [ ] Zoo Tap: server URL set, **Test connection** shows ✅, Start Scanning, one test tap shows
+      in ⌥0 Debug as 📱 phone.
 - [ ] Reader: one test tap shows as ⌨️ reader. Typing test mode is **off**.
 - [ ] ⌥3 → **Reset check-ins** right before the kids start.
 - [ ] Spare badge for "ACCESS DENIED" demo (any unregistered NFC sticker).
