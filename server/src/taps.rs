@@ -100,7 +100,11 @@ mod tests {
             aliases: vec![],
             emoji: "🐧".into(),
             label: "Penguin".into(),
-            color: None,
+            color: crate::registry::CardColor {
+                hex: "#1E5BD8".into(),
+                name: "Blue".into(),
+            },
+            trick: false,
         }])
         .unwrap();
         reg

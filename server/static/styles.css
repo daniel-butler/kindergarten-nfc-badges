@@ -200,6 +200,28 @@ button {
 .dup .title { font-size: 13vmin; }
 .dup .subtitle { color: #fff; }
 
+.btn.trick-on { background: #8e24aa; border-color: #e1bee7; }
+.mini-card.trick { position: relative; }
+.mini-card.trick::after { content: "🎭"; position: absolute; right: -1vmin; bottom: -1vmin; font-size: 4vmin; }
+
+/* ---------- secret number ---------- */
+
+.digits { display: flex; gap: 1.2vmin; justify-content: center; flex-wrap: nowrap; max-width: 100%; }
+
+.digit {
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  /* n tiles of (1.15em + borders) plus gaps must fit in ~92% of the width */
+  font-size: min(18vmin, calc((92vw / var(--n) - 2.4vmin) / 1.15));
+  width: 1.15em;
+  line-height: 1.3;
+  border-radius: 1.5vmin;
+  background: var(--panel);
+  border: 0.6vmin solid var(--accent);
+  color: var(--accent);
+}
+
+.digit.hidden { visibility: hidden; }
+
 /* ---------- debug ---------- */
 
 .scene-debug { justify-content: flex-start; align-items: stretch; text-align: left; }

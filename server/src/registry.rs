@@ -11,8 +11,32 @@ pub struct Card {
     pub aliases: Vec<String>,
     pub emoji: String,
     pub label: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub color: Option<String>,
+    pub color: CardColor,
+    /// Stored data deliberately doesn't match the physical badge; excluded from "all checked in".
+    #[serde(default)]
+    pub trick: bool,
+}
+
+/// Cardstock color of the physical badge.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct CardColor {
+    pub hex: String,
+    pub name: String,
+}
+
+fn normalize_color(color: &CardColor) -> Result<CardColor, String> {
+    let digits = color.hex.trim().trim_start_matches('#');
+    let name = color.name.trim();
+    if digits.len() != 6 || !digits.chars().all(|c| c.is_ascii_hexdigit()) || name.is_empty() {
+        return Err(format!(
+            "invalid color {:?} {:?}: need \"#RRGGBB\" and a name",
+            color.hex, color.name
+        ));
+    }
+    Ok(CardColor {
+        hex: format!("#{}", digits.to_ascii_uppercase()),
+        name: name.to_string(),
+    })
 }
 
 impl Card {
@@ -86,9 +110,14 @@ pub fn validate(cards: Vec<Card>) -> Result<Vec<Card>, String> {
                 aliases.push(alias);
             }
         }
+        if card.emoji.trim().is_empty() || card.label.trim().is_empty() {
+            return Err(format!("card {canonical_id} needs an emoji and a label"));
+        }
+        let color = normalize_color(&card.color)?;
         out.push(Card {
             canonical_id,
             aliases,
+            color,
             ..card
         });
     }
@@ -125,7 +154,11 @@ mod tests {
             aliases: aliases.iter().map(|s| s.to_string()).collect(),
             emoji: emoji.into(),
             label: "x".into(),
-            color: None,
+            color: CardColor {
+                hex: "#1e5bd8".into(),
+                name: "Blue".into(),
+            },
+            trick: false,
         }
     }
 
@@ -171,6 +204,31 @@ mod tests {
     #[test]
     fn validate_rejects_bad_hex() {
         assert!(validate(vec![card("zebra", &[], "🦓")]).is_err());
+    }
+
+    #[test]
+    fn validate_normalizes_color_and_rejects_bad_ones() {
+        let out = validate(vec![card("04A1B2C3D4E5F6", &[], "🐧")]).unwrap();
+        assert_eq!(out[0].color.hex, "#1E5BD8");
+        for (hex, name) in [("blue", "Blue"), ("#12345", "Blue"), ("#1E5BD8", " ")] {
+            let mut c = card("04A1B2C3D4E5F6", &[], "🐧");
+            c.color = CardColor {
+                hex: hex.into(),
+                name: name.into(),
+            };
+            assert!(validate(vec![c]).is_err(), "{hex} {name}");
+        }
+    }
+
+    #[test]
+    fn trick_defaults_to_false_and_round_trips() {
+        let json = r##"[{"canonical_id":"04A1B2C3D4E5F6","emoji":"🐧","label":"Penguin","color":{"hex":"#1E5BD8","name":"Blue"}}]"##;
+        let mut cards: Vec<Card> = serde_json::from_str(json).unwrap();
+        assert!(!cards[0].trick);
+        cards[0].trick = true;
+        let back: Vec<Card> =
+            serde_json::from_str(&serde_json::to_string(&cards).unwrap()).unwrap();
+        assert!(back[0].trick);
     }
 
     #[test]

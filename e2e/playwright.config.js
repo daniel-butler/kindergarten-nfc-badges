@@ -1,9 +1,12 @@
+const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { defineConfig } = require('@playwright/test');
 
 const PORT = 8181;
-const CARDS = path.join(os.tmpdir(), 'badge-e2e-cards.json');
+// Fresh registry per run. Set via env so worker processes see the same path.
+process.env.BADGE_E2E_CARDS ??= path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'badge-e2e-')), 'cards.json');
+const CARDS = process.env.BADGE_E2E_CARDS;
 
 module.exports = defineConfig({
   testDir: './tests',

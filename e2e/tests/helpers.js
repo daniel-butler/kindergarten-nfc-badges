@@ -1,7 +1,7 @@
 const { expect } = require('@playwright/test');
 
-const PENGUIN = { canonical_id: '04A1B2C3D4E5F6', emoji: '🐧', label: 'Penguin', color: '#1E5BD8' };
-const LION = { canonical_id: '04AABBCCDDEEFF', emoji: '🦁', label: 'Lion', color: '#FDD835' };
+const PENGUIN = { canonical_id: '04A1B2C3D4E5F6', emoji: '🐧', label: 'Penguin', color: { hex: '#1E5BD8', name: 'Blue' } };
+const LION = { canonical_id: '04AABBCCDDEEFF', emoji: '🦁', label: 'Lion', color: { hex: '#FDD835', name: 'Yellow' } };
 
 async function setCards(request, cards) {
   const res = await request.put('/api/cards', { data: cards });
@@ -47,4 +47,7 @@ async function humanType(page, id) {
 
 const scene = (page) => page.locator('#scene');
 
-module.exports = { PENGUIN, LION, setCards, getCards, phoneTap, setLinkMode, openScene, readerScan, humanType, scene };
+/** Debug-log rows for real taps (not notes). */
+const tapRows = (page, source) => scene(page).locator('tr', { hasText: source === 'phone' ? '📱 phone' : '⌨️ reader' });
+
+module.exports = { PENGUIN, LION, setCards, getCards, phoneTap, setLinkMode, openScene, readerScan, humanType, scene, tapRows };

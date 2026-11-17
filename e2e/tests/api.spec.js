@@ -36,6 +36,18 @@ test('registry normalizes ids and rejects the same badge on two cards', async ({
   expect(await getCards(request)).toHaveLength(1);
 });
 
+test('cards require a cardstock color and keep the trick flag', async ({ request }) => {
+  const { color, ...noColor } = PENGUIN;
+  expect((await request.put('/api/cards', { data: [noColor] })).status()).toBe(422);
+  expect((await request.put('/api/cards', { data: [{ ...PENGUIN, color: { hex: 'blue', name: 'Blue' } }] })).status()).toBe(409);
+
+  const saved = await setCards(request, [{ ...PENGUIN, color: { hex: '#1e5bd8', name: 'Blue' } }, { ...LION, trick: true }]);
+  expect(saved[0]).toMatchObject({ color: { hex: '#1E5BD8', name: 'Blue' }, trick: false });
+  expect(saved[1].trick).toBe(true);
+  const ev = await (await tap(request, LION.canonical_id)).json();
+  expect(ev.card).toMatchObject({ trick: true, color: { name: 'Yellow' } });
+});
+
 test('link mode attaches an unrelated reader id to the card tapped on the phone', async ({ request }) => {
   await phoneTap(request, PENGUIN.canonical_id);
   expect((await (await tap(request, '99887766')).json()).card).toBeNull(); // link mode off

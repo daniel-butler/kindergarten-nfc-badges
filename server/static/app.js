@@ -112,6 +112,9 @@ const Sound = (() => {
     unlock: audio,
     get muted() { return muted; },
     set muted(value) { muted = value; },
+    tick(i = 0) {
+      tone(660 + i * 35, 0, 0.09, { type: 'triangle', gain: 0.18 });
+    },
     chime() {
       [784, 988, 1319].forEach((f, i) => {
         tone(f, i * 0.11, 0.6, { gain: 0.3 });
@@ -324,14 +327,6 @@ const Badge = (() => {
       } catch {
         api.banner('🔌 Server not reachable', { error: true });
       }
-    },
-
-    cardColor(card) {
-      return card?.color || null;
-    },
-
-    colorName(hex) {
-      return COLORS.find((c) => c.hex.toLowerCase() === (hex || '').toLowerCase())?.name || hex || 'No color';
     },
 
     /** Visible for `ms`, or until cleared when ms is 0. */
@@ -549,12 +544,12 @@ const Panel = (() => {
 // ===================================================================
 
 function cardCircle(card) {
-  return el('div', { class: 'badge-circle pop', style: `background:${card.color || '#333'}` },
+  return el('div', { class: 'badge-circle pop', style: `background:${card.color.hex}` },
     el('div', { class: 'huge-emoji' }, card.emoji));
 }
 
 function cardConfetti(card) {
-  Confetti.burst(card.color ? [card.color] : null, { y: 0.45 });
+  Confetti.burst([card.color.hex], { y: 0.45 });
 }
 
 // ===================================================================
@@ -564,12 +559,17 @@ function cardConfetti(card) {
 Badge.registerScene((() => {
   let root;
   let view; // { kind: 'idle' } | { kind: 'pick', id, card? } | { kind: 'card', card, note } | { kind: 'dup', message }
-  let choice = { emoji: null, label: null, color: null };
+  let choice;
+
+  const emptyChoice = () => ({ emoji: null, label: null, color: null, trick: false });
 
   function header() {
+    const n = Badge.cards.length;
+    const tricks = Badge.cards.filter((c) => c.trick).length;
     return el('div', { class: 'setup-header' },
       el('div', {}, '🛠️ Setup'),
-      el('div', { class: 'count-pill' }, `${Badge.cards.length} badge${Badge.cards.length === 1 ? '' : 's'} registered`));
+      el('div', { class: 'count-pill' },
+        `${n} badge${n === 1 ? '' : 's'} registered${tricks ? ` · ${tricks} 🎭` : ''}`));
   }
 
   function set(next) {
@@ -587,8 +587,8 @@ Badge.registerScene((() => {
       case 'pick': return picker();
       case 'card': return [
         cardCircle(view.card),
-        el('div', { class: 'big-label' }, view.card.label),
-        el('div', { class: 'subtitle' }, view.note),
+        el('div', { class: 'big-label' }, `${view.card.label} · ${view.card.color.name}`),
+        el('div', { class: 'subtitle' }, view.note, view.card.trick ? ' · 🎭 trick badge' : ''),
         el('div', { class: 'row' },
           el('button', { class: 'btn', onclick: () => startEdit(view.card) }, '✏️ Change'),
           el('button', { class: 'btn primary', onclick: () => set({ kind: 'idle' }) }, 'Done')),
@@ -604,8 +604,8 @@ Badge.registerScene((() => {
         el('div', { class: 'subtitle' }, 'To link phone + reader: tap on one, then the other'),
         el('div', { class: 'card-strip' }, Badge.cards.map((c) =>
           el('button', {
-            class: 'mini-card',
-            style: `background:${c.color || '#333'}`,
+            class: `mini-card ${c.trick ? 'trick' : ''}`,
+            style: `background:${c.color.hex}`,
             title: c.label,
             onclick: () => startEdit(c),
           }, c.emoji))),
@@ -631,36 +631,42 @@ Badge.registerScene((() => {
         }, a.emoji))),
       el('div', { class: 'swatches' }, COLORS.map((c) =>
         el('button', {
-          class: `swatch ${choice.color === c.hex ? 'selected' : ''}`,
+          class: `swatch ${choice.color?.hex === c.hex ? 'selected' : ''}`,
           style: `background:${c.hex}`,
           title: c.name,
           onclick: () => {
-            choice.color = c.hex;
+            choice.color = { hex: c.hex, name: c.name };
             render();
           },
         }))),
       el('div', { class: 'selection' },
         choice.emoji ? el('span', { class: 'em' }, choice.emoji) : null,
         el('span', {}, choice.label || 'Pick an animal'),
-        choice.color ? el('span', { class: 'dot', style: `background:${choice.color}` }) : null,
-        el('span', {}, choice.color ? Badge.colorName(choice.color) : '· pick a color'),
+        choice.color ? el('span', { class: 'dot', style: `background:${choice.color.hex}` }) : null,
+        el('span', {}, choice.color ? choice.color.name : '· pick a color'),
         el('span', { class: 'mono subtitle' }, `· ${view.id}`)),
       el('div', { class: 'row' },
         el('button', { class: 'btn primary', disabled: ready ? null : 'disabled', onclick: save }, '💾 Save'),
+        el('button', {
+          class: `btn ${choice.trick ? 'trick-on' : ''}`,
+          onclick: () => {
+            choice.trick = !choice.trick;
+            render();
+          },
+        }, choice.trick ? '🎭 Trick: ON' : '🎭 Trick: off'),
         el('button', { class: 'btn', onclick: () => set({ kind: 'idle' }) }, 'Cancel'),
         editing ? el('button', { class: 'btn danger', onclick: remove }, '🗑️ Delete') : null),
     ];
   }
 
   function startEdit(card) {
-    choice = { emoji: card.emoji, label: card.label, color: card.color || null };
+    choice = { emoji: card.emoji, label: card.label, color: card.color, trick: !!card.trick };
     set({ kind: 'pick', id: card.canonical_id, card });
   }
 
   async function save() {
     const { id, card } = view;
     const updated = { ...(card || { canonical_id: id, aliases: [] }), ...choice };
-    if (!updated.color) delete updated.color;
     const cards = card
       ? Badge.cards.map((c) => (c.canonical_id === card.canonical_id ? updated : c))
       : [...Badge.cards, updated];
@@ -694,6 +700,7 @@ Badge.registerScene((() => {
     linkMode: true,
     onEnter(r) {
       root = r;
+      choice = emptyChoice();
       set({ kind: 'idle' });
     },
     onCards: () => render(),
@@ -706,7 +713,7 @@ Badge.registerScene((() => {
         const note = ev.linked ? `🔗 Linked ${ev.source} ID ${ev.canonical_id}` : `Already registered ✓ (${ev.source})`;
         set({ kind: 'card', card: ev.card, note });
       } else if (!(view.kind === 'pick' && view.id === ev.canonical_id)) {
-        choice = { emoji: null, label: null, color: null };
+        choice = emptyChoice();
         set({ kind: 'pick', id: ev.canonical_id });
       }
     },
@@ -714,44 +721,47 @@ Badge.registerScene((() => {
 })());
 
 // ===================================================================
-// Scene: Free tap
+// Scene: Secret Number
 // ===================================================================
 
 Badge.registerScene((() => {
+  const FIRST_DIGIT_MS = 400;
+  const DIGIT_MS = 220;
   let root;
-  let resetTimer;
+  let timers = [];
 
   function idle() {
-    root.className = 'scene scene-free';
     root.replaceChildren(
-      el('div', { class: 'huge-emoji pulse' }, '👋'),
-      el('div', { class: 'title' }, 'Tap your badge!'));
+      el('div', { class: 'huge-emoji pulse' }, '🔢'),
+      el('div', { class: 'title' }, 'Tap a badge to see its secret number!'));
+  }
+
+  function reveal(raw) {
+    for (const t of timers) Badge.cancel(t);
+    const chars = [...raw.toUpperCase().replace(/[^0-9A-F]/g, '')];
+    const digits = chars.map((ch) => el('span', { class: 'digit hidden' }, ch));
+    root.replaceChildren(
+      el('div', { class: 'title' }, '🤫 The secret number is…'),
+      el('div', { class: 'digits', style: `--n:${chars.length}` }, digits));
+    timers = digits.map((d, i) => Badge.later(() => {
+      d.classList.remove('hidden');
+      d.classList.add('pop');
+      Sound.tick(i);
+    }, FIRST_DIGIT_MS + i * DIGIT_MS));
+    timers.push(Badge.later(() => Sound.chime(), FIRST_DIGIT_MS + chars.length * DIGIT_MS + 100));
   }
 
   return {
-    id: 'free',
-    name: '👋 Free tap',
+    id: 'secret',
+    name: '🔢 Secret Number',
     key: '2',
+    acceptRepeats: true,
     onEnter(r) {
       root = r;
+      timers = [];
       idle();
     },
-    onTap(ev) {
-      Badge.cancel(resetTimer);
-      if (ev.card) {
-        root.className = 'scene scene-free';
-        root.replaceChildren(cardCircle(ev.card), el('div', { class: 'big-label pop' }, ev.card.label));
-        Sound.chime();
-        cardConfetti(ev.card);
-      } else {
-        root.className = 'scene scene-free denied';
-        root.replaceChildren(
-          el('div', { class: 'huge-emoji shake' }, '⛔'),
-          el('div', { class: 'title shake' }, 'ACCESS DENIED'));
-        Sound.buzzer();
-      }
-      resetTimer = Badge.later(idle, 4000);
-    },
+    onTap: (ev) => reveal(ev.raw_id),
   };
 })());
 
@@ -776,7 +786,7 @@ Badge.registerScene((() => {
       el('td', { class: 'mono' }, ev.raw_id),
       el('td', { class: 'mono' }, ev.canonical_id),
       ev.card
-        ? el('td', {}, el('span', { class: 'em' }, ev.card.emoji), ` ${ev.card.label} ${flags}`)
+        ? el('td', {}, el('span', { class: 'em' }, ev.card.emoji), ` ${ev.card.label}${ev.card.trick ? ' 🎭' : ''} ${flags}`)
         : el('td', { class: 'miss' }, `— unknown ${flags}`));
   }
 
@@ -826,5 +836,5 @@ Badge.registerScene((() => {
   document.addEventListener('keydown', begin);
 
   Badge._connect();
-  Badge.show(location.hash.slice(1) || 'free');
+  Badge.show(location.hash.slice(1) || 'setup');
 })();

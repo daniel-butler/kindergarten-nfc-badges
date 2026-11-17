@@ -6,39 +6,24 @@ test.beforeEach(async ({ request }) => {
   await setCards(request, [PENGUIN, LION]);
 });
 
-test.describe('Free tap', () => {
-  test('known card shows emoji and label; unknown shows ACCESS DENIED', async ({ page, request }) => {
-    await openScene(page, 'free', 2);
-    await phoneTap(request, LION.canonical_id);
-    await expect(scene(page)).toContainText('🦁');
-    await expect(scene(page)).toContainText('Lion');
-    await expect(scene(page).locator('.badge-circle')).toHaveCSS('background-color', 'rgb(253, 216, 53)');
-
+test.describe('Secret Number', () => {
+  test('reveals the raw id digit by digit, for known and unknown badges', async ({ page, request }) => {
+    await openScene(page, 'secret', 2);
+    await expect(scene(page)).toContainText('secret number');
     await phoneTap(request, 'DEADBEEF');
-    await expect(scene(page)).toContainText('ACCESS DENIED');
-    await expect(page.locator('#scene')).toHaveClass(/denied/);
+    await expect(scene(page).locator('.digit')).toHaveCount(8);
+    await expect(scene(page).locator('.digit.hidden')).not.toHaveCount(0);
+    await expect(scene(page).locator('.digit.hidden')).toHaveCount(0, { timeout: 4000 });
+    await expect(scene(page).locator('.digits')).toHaveText('DEADBEEF');
+
+    await phoneTap(request, PENGUIN.canonical_id);
+    await expect(scene(page).locator('.digits')).toHaveText('04A1B2C3D4E5F6', { timeout: 5000 });
   });
 
-  test('returns to idle after a few seconds', async ({ page, request }) => {
-    await openScene(page, 'free', 2);
-    await phoneTap(request, PENGUIN.canonical_id);
-    await expect(scene(page)).toContainText('Penguin');
-    await expect(scene(page)).toContainText('Tap your badge!', { timeout: 6000 });
-  });
-
-  test('a quick repeat of the same badge is ignored', async ({ page, request }) => {
-    await openScene(page, 'free', 2);
-    await phoneTap(request, PENGUIN.canonical_id);
-    await expect(scene(page)).toContainText('Penguin');
-    await page.evaluate(() => {
-      window.__taps = 0;
-      const free = window.Badge.current;
-      const orig = free.onTap;
-      free.onTap = (ev) => { window.__taps++; orig.call(free, ev); };
-    });
-    await phoneTap(request, 'C3B2A104'); // same badge via reader-style id
-    await page.waitForTimeout(300);
-    expect(await page.evaluate(() => window.__taps)).toBe(0);
+  test('shows the raw id as the reader typed it', async ({ page }) => {
+    await openScene(page, 'secret', 2);
+    await readerScan(page, 'c3b2a104');
+    await expect(scene(page).locator('.digits')).toHaveText('C3B2A104', { timeout: 4000 });
   });
 });
 
@@ -65,24 +50,40 @@ test.describe('Setup', () => {
     await expect(scene(page)).toContainText('3 badges registered');
 
     const fox = (await getCards(request)).find((c) => c.canonical_id === '04112233445566');
-    expect(fox).toMatchObject({ emoji: '🦊', label: 'Fox', color: '#FB8C00' });
+    expect(fox).toMatchObject({ emoji: '🦊', label: 'Fox', color: { hex: '#FB8C00', name: 'Orange' }, trick: false });
   });
 
   test('known badge can be changed and deleted', async ({ page, request }) => {
     await openScene(page, 'setup', 2);
     await phoneTap(request, LION.canonical_id);
     await expect(scene(page)).toContainText('Already registered');
+    await expect(scene(page)).toContainText('Lion · Yellow');
+    await expect(scene(page).locator('.badge-circle')).toHaveCSS('background-color', 'rgb(253, 216, 53)');
     await page.locator('button', { hasText: 'Change' }).click();
     await page.locator('button.swatch[title=Purple]').click();
     await page.locator('button', { hasText: 'Save' }).click();
     await expect(scene(page)).toContainText('Saved');
-    expect((await getCards(request)).find((c) => c.label === 'Lion').color).toBe('#8E24AA');
+    expect((await getCards(request)).find((c) => c.label === 'Lion').color).toEqual({ hex: '#8E24AA', name: 'Purple' });
 
     await page.locator('button', { hasText: 'Done' }).click();
     await page.locator('.mini-card[title=Lion]').click();
     await page.locator('button', { hasText: 'Delete' }).click();
     await expect(scene(page)).toContainText('1 badge registered');
     expect(await getCards(request)).toHaveLength(1);
+  });
+
+  test('a badge can be marked as a trick badge', async ({ page, request }) => {
+    await openScene(page, 'setup', 2);
+    await page.locator('.mini-card[title=Penguin]').click();
+    await page.locator('button.animal[title=Owl]').click();
+    await page.locator('button', { hasText: 'Trick: off' }).click();
+    await page.locator('button', { hasText: 'Save' }).click();
+    await expect(scene(page)).toContainText('trick badge');
+    await page.locator('button', { hasText: 'Done' }).click();
+    await expect(page.locator('.mini-card.trick')).toHaveCount(1);
+    await expect(page.locator('.count-pill')).toContainText('1 🎭');
+    const owl = (await getCards(request)).find((c) => c.canonical_id === PENGUIN.canonical_id);
+    expect(owl).toMatchObject({ emoji: '🦉', label: 'Owl', trick: true, color: { name: 'Blue' } });
   });
 
   test('tap phone then reader links the reader id', async ({ page, request }) => {
@@ -119,7 +120,7 @@ test.describe('Debug and presenter panel', () => {
   });
 
   test('panel lists scenes and switches between them', async ({ page }) => {
-    await openScene(page, 'free', 2);
+    await openScene(page, 'secret', 2);
     await page.keyboard.press('Alt+p');
     const panel = page.locator('#panel');
     await expect(panel).toBeVisible();
@@ -145,13 +146,23 @@ test.describe('720p layout', () => {
       expect(box.x + box.width, sel).toBeLessThanOrEqual(1280);
     }
   });
+
+  test('a full 14-digit secret number fits on one line', async ({ page, request }) => {
+    await openScene(page, 'secret', 2);
+    await phoneTap(request, PENGUIN.canonical_id);
+    await expect(scene(page).locator('.digit.hidden')).toHaveCount(0, { timeout: 5000 });
+    const boxes = await scene(page).locator('.digit').evaluateAll((els) => els.map((e) => e.getBoundingClientRect().toJSON()));
+    expect(new Set(boxes.map((b) => Math.round(b.top))).size).toBe(1);
+    expect(Math.min(...boxes.map((b) => b.left))).toBeGreaterThanOrEqual(0);
+    expect(Math.max(...boxes.map((b) => b.right))).toBeLessThanOrEqual(1280);
+  });
 });
 
 test('no page errors across scenes', async ({ page, request }) => {
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
   await openScene(page, 'setup', 2);
-  for (const key of ['Alt+2', 'Alt+0', 'Alt+1']) {
+  for (const key of ['Alt+2', 'Alt+0', 'Alt+1', 'Alt+2']) {
     await page.keyboard.press(key);
     await phoneTap(request, PENGUIN.canonical_id);
     await phoneTap(request, 'DEADBEEF');
