@@ -8,6 +8,8 @@
 	<string>Zoo Tap sends badge taps to the Classroom Zoo server on your Mac.</string>
 	<key>NSAppTransportSecurity</key>
 	<dict>
+		<key>NSAllowsArbitraryLoads</key>
+		<true/>
 		<key>NSAllowsLocalNetworking</key>
 		<true/>
 	</dict>
