@@ -54,6 +54,8 @@ let emptyPresenter = try? JSONDecoder().decode(PresenterDTO.self, from: Data(#"{
 check(emptyPresenter != nil && emptyPresenter?.waiting == nil, "PresenterDTO decodes nulls")
 check(TapClient.shortcuts.contains { $0.key == "⌥A" && $0.action.contains("Allow") }, "shortcuts list ⌥A Allow special")
 check(TapClient.shortcuts.contains { $0.key == "⌥R ⌥R" }, "shortcuts list the reset double press")
+check(TapClient.shortcuts.contains { $0.key == "⌥Y" && $0.action.hasPrefix("Let in") }, "⌥Y says Let in")
+check(TapClient.shortcuts.contains { $0.key == "⌥N" && $0.action.hasPrefix("Keep out") }, "⌥N says Keep out")
 
 if let server = ProcessInfo.processInfo.environment["BADGE_SERVER"] {
     let registered = DispatchSemaphore(value: 0)

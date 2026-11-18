@@ -25,7 +25,7 @@ opening uses a bare NFC sticker on ⌥2 Secret Number (no code change).
 - **Tally**: big tally marks in groups of five (four strokes + a diagonal), pop per entry, no
   denominator. +1 for each normal entry, each trick voted in, and the special badge.
 - **Trick vote**: tapping a trick badge shows its stored animal + color with a bouncing "?" and two
-  big pictures, 👍 "Let it in" / 👎 "Keep it out". Presenter decides (phone or key). Let in: it
+  big pictures, 👍 "Let in" / 👎 "Keep out". Presenter decides (phone or key). Let in: it
   enters with confetti in its stored color, +1. Keep out: a gatekeeper goose 🪿 waves it bye-bye with
   a silly honk; no tally.
 - **Special finale**: (1) tap → nearly wordless denial: the animal peeks at the gate, the goose

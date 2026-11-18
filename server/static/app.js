@@ -543,8 +543,8 @@ const Panel = (() => {
       button('Confetti', null, () => Confetti.burst()),
       el('h2', {}, 'Zoo'),
       button('📋 Zoo List', '⌥L', () => Commands.send('toggle-list')),
-      button('👍 Let it in', '⌥Y', () => Commands.send('let-in')),
-      button('👎 Keep it out', '⌥N', () => Commands.send('keep-out')),
+      button('👍 Let in', '⌥Y', () => Commands.send('let-in')),
+      button('👎 Keep out', '⌥N', () => Commands.send('keep-out')),
       button('⭐ Allow special', '⌥A', () => Commands.send('allow-special')),
       button(performance.now() < resetArmedUntil ? '⚠️ Click again to reset' : '🔄 Reset the zoo', '⌥R ⌥R', requestReset),
       el('h2', {}, 'Status'),
@@ -962,8 +962,8 @@ function zooVoteOverlay(card) {
   return el('div', { class: 'zoo-vote' },
     el('div', { class: 'vote-card' }, cardCircle(card), el('div', { class: 'vote-question' }, '?')),
     el('div', { class: 'vote-choices' },
-      el('div', { class: 'vote-yes' }, '👍 Let it in'),
-      el('div', { class: 'vote-no' }, '👎 Keep it out')));
+      el('div', { class: 'vote-yes' }, '👍 Let in'),
+      el('div', { class: 'vote-no' }, '👎 Keep out')));
 }
 
 /** Kept out: the gatekeeper goose waves the sticker bye-bye. */

@@ -167,8 +167,8 @@ test.describe('trick badge votes', () => {
     await expect(vote).toBeVisible();
     await expect(vote).toContainText('🦊');
     await expect(vote.locator('.vote-question')).toHaveText('?');
-    await expect(vote.locator('.vote-yes')).toHaveText('👍 Let it in');
-    await expect(vote.locator('.vote-no')).toHaveText('👎 Keep it out');
+    await expect(vote.locator('.vote-yes')).toHaveText('👍 Let in');
+    await expect(vote.locator('.vote-no')).toHaveText('👎 Keep out');
     expect(await zooState(page)).toMatchObject({ pendingVote: FOX_TRICK.canonical_id, tally: 0, inside: [] });
   });
 

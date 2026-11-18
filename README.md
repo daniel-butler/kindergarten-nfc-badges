@@ -106,8 +106,8 @@ Presenter keys always use **Option** so the reader can never trigger them:
 | ⌥6 | Zoo Gate, 2D (backup if 3D misbehaves) |
 | ⌥0 | Debug (presenter only) |
 | ⌥L | Show / hide the Zoo List |
-| ⌥Y | 👍 Let it in (trick vote) |
-| ⌥N | 👎 Keep it out (trick vote) |
+| ⌥Y | 👍 Let in (trick vote) |
+| ⌥N | 👎 Keep out (trick vote) |
 | ⌥A | ⭐ Allow the special badge |
 | ⌥S | Start the party (zoo scenes) / next animal (Who has) |
 | ⌥R ⌥R | Reset the zoo (press twice within 3 s): tally, everyone inside, votes, party, special denied again |
@@ -136,7 +136,7 @@ and sound effects. There is no spoken voice. Setup and Debug stay dark.
   queue up and arrive faster. A **tally** at the top adds a mark (groups of five) for each normal
   entry, each trick badge voted in, and the special badge. Check-ins survive a reload.
   - *Unknown badge*: small "Oops! Tap again 🔄" with a soft boop. Nobody goes in.
-  - *🎭 Trick badge*: its stored animal and color with a bouncing "?" and 👍 Let it in / 👎 Keep it
+  - *🎭 Trick badge*: its stored animal and color with a bouncing "?" and 👍 Let in / 👎 Keep
     out. Kids vote with thumbs; you press ⌥Y / ⌥N (or the phone). Let in → it walks in with
     confetti and a mark. Keep out → the gatekeeper goose 🪿 waves it bye-bye with a honk. Taps
     during a vote wait their turn.

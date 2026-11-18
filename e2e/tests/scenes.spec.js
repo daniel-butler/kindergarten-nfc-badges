@@ -137,14 +137,14 @@ test.describe('Debug and presenter panel', () => {
     await page.keyboard.press('Alt+p');
     const panel = page.locator('#panel');
     await expect(panel).toContainText('Last unknown: DEADBEEF');
-    for (const label of ['📋 Zoo List', '👍 Let it in', '👎 Keep it out', '⭐ Allow special', '🔄 Reset the zoo']) {
+    for (const label of ['📋 Zoo List', '👍 Let in', '👎 Keep out', '⭐ Allow special', '🔄 Reset the zoo']) {
       await expect(panel.locator('button', { hasText: label })).toHaveCount(1);
     }
     await page.waitForTimeout(1600);
     await phoneTap(request, FOX_TRICK.canonical_id);
     await expect(page.locator('.zoo-vote')).toBeVisible();
     await page.waitForTimeout(1100); // the class votes
-    await panel.locator('button', { hasText: '👍 Let it in' }).click();
+    await panel.locator('button', { hasText: '👍 Let in' }).click();
     await expect(page.locator('.zoo-tally[data-count="1"]')).toBeVisible();
   });
 
