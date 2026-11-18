@@ -1,5 +1,5 @@
 const { test, expect } = require('@playwright/test');
-const { PENGUIN, LION, setCards, getCards, phoneTap, setLinkMode, uploadImage, PNG_1PX } = require('./helpers');
+const { PENGUIN, LION, FOX_TRICK, STAR_SPECIAL, command, setCards, getCards, phoneTap, setLinkMode, uploadImage, PNG_1PX } = require('./helpers');
 
 test.beforeEach(async ({ request }) => {
   await setLinkMode(request, false);
@@ -36,16 +36,16 @@ test('registry normalizes ids and rejects the same badge on two cards', async ({
   expect(await getCards(request)).toHaveLength(1);
 });
 
-test('cards require a cardstock color and keep the trick flag', async ({ request }) => {
+test('cards require a cardstock color and keep their role', async ({ request }) => {
   const { color, ...noColor } = PENGUIN;
   expect((await request.put('/api/cards', { data: [noColor] })).status()).toBe(422);
   expect((await request.put('/api/cards', { data: [{ ...PENGUIN, color: { hex: 'blue', name: 'Blue' } }] })).status()).toBe(409);
 
-  const saved = await setCards(request, [{ ...PENGUIN, color: { hex: '#1e5bd8', name: 'Blue' } }, { ...LION, trick: true }]);
-  expect(saved[0]).toMatchObject({ color: { hex: '#1E5BD8', name: 'Blue' }, trick: false });
-  expect(saved[1].trick).toBe(true);
+  const saved = await setCards(request, [{ ...PENGUIN, color: { hex: '#1e5bd8', name: 'Blue' } }, { ...LION, role: 'trick' }]);
+  expect(saved[0]).toMatchObject({ color: { hex: '#1E5BD8', name: 'Blue' }, role: 'normal' });
+  expect(saved[1].role).toBe('trick');
   const ev = await (await tap(request, LION.canonical_id)).json();
-  expect(ev.card).toMatchObject({ trick: true, color: { name: 'Yellow' } });
+  expect(ev.card).toMatchObject({ role: 'trick', color: { name: 'Yellow' } });
 });
 
 test('link mode attaches an unrelated reader id to the card tapped on the phone', async ({ request }) => {
@@ -135,4 +135,54 @@ test('away card tapped clears away; clear-away resets all', async ({ request }) 
   expect(cards.find((c) => c.label === 'Lion').away).toBe(true);
   const cleared = await (await request.post('/api/cards/clear-away')).json();
   expect(cleared.every((c) => c.away === false)).toBe(true);
+});
+
+test('role round-trips and legacy trick maps to trick', async ({ request }) => {
+  const saved = await setCards(request, [{ ...PENGUIN, trick: true }, STAR_SPECIAL, LION]);
+  expect(saved.map((c) => c.role)).toEqual(['trick', 'special', 'normal']);
+  expect(saved[0]).not.toHaveProperty('trick');
+  expect(saved[1].allowed).toBe(false);
+});
+
+test('presenter shows the waiting trick badge and the last unknown id', async ({ request }) => {
+  await setCards(request, [PENGUIN, FOX_TRICK]);
+  await command(request, 'reset');
+  await phoneTap(request, 'deadbeef');
+  await phoneTap(request, FOX_TRICK.canonical_id);
+  const p = await (await request.get('/api/presenter')).json();
+  expect(p.last_unknown.raw_id).toBe('deadbeef');
+  expect(p.waiting).toMatchObject({ kind: 'trick', raw_id: FOX_TRICK.canonical_id, card: { label: 'Fox' } });
+  await command(request, 'keep-out');
+  expect((await (await request.get('/api/presenter')).json()).waiting).toBeNull();
+});
+
+test('allow-special flips allowed, and commands reach the page over SSE', async ({ page, request }) => {
+  await setCards(request, [PENGUIN, STAR_SPECIAL]);
+  await page.goto('/');
+  const got = page.evaluate(() => new Promise((resolve) => {
+    const es = new EventSource('/events');
+    es.addEventListener('open', () => (window.__sseOpen = true));
+    es.addEventListener('command', (e) => { es.close(); resolve(JSON.parse(e.data)); });
+  }));
+  await page.waitForFunction(() => window.__sseOpen);
+  expect((await command(request, 'allow-special')).status()).toBe(200);
+  expect(await got).toEqual({ action: 'allow-special' });
+  const star = (await getCards(request)).find((c) => c.role === 'special');
+  expect(star.allowed).toBe(true);
+  await phoneTap(request, STAR_SPECIAL.canonical_id);
+  expect((await (await request.get('/api/presenter')).json()).waiting).toBeNull();
+});
+
+test('reset denies the special again and clears presenter state', async ({ request }) => {
+  await setCards(request, [STAR_SPECIAL]);
+  await phoneTap(request, STAR_SPECIAL.canonical_id);
+  await phoneTap(request, 'deadbeef');
+  await command(request, 'allow-special');
+  await command(request, 'reset');
+  expect((await getCards(request))[0].allowed).toBe(false);
+  expect(await (await request.get('/api/presenter')).json()).toEqual({ waiting: null, last_unknown: null });
+});
+
+test('unknown command is rejected', async ({ request }) => {
+  expect((await command(request, 'nope')).status()).toBe(400);
 });

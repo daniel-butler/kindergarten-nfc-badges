@@ -12,15 +12,33 @@ pub struct Card {
     pub emoji: String,
     pub label: String,
     pub color: CardColor,
-    /// Stored data deliberately doesn't match the physical badge; excluded from "all checked in".
     #[serde(default)]
-    pub trick: bool,
+    pub role: Role,
+    /// Input only: older cards.json files marked trick badges with `"trick": true`.
+    #[serde(default, rename = "trick", skip_serializing)]
+    pub legacy_trick: bool,
+    /// Special badges stay out of the zoo until the presenter allows them.
+    #[serde(default)]
+    pub allowed: bool,
     /// Served URL of the sticker cutout, e.g. `/images/04A1B2C3D4E5F6.png?v=1731871234000`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub image: Option<String>,
     /// "Not here today": left out of the zoo count until this badge is tapped.
     #[serde(default)]
     pub away: bool,
+}
+
+/// How the zoo treats a badge.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Role {
+    /// Walks in and adds a tally mark.
+    #[default]
+    Normal,
+    /// Stored animal/color deliberately wrong: the class votes on it.
+    Trick,
+    /// Denied until the presenter allows it; its entry starts the party.
+    Special,
 }
 
 pub const MAX_IMAGE_BYTES: usize = 5 * 1024 * 1024;
@@ -171,6 +189,15 @@ impl Registry {
         Ok(self.cards[idx].clone())
     }
 
+    /// Allow (or deny again) every special badge.
+    pub fn set_allowed_for_specials(&mut self, allowed: bool) -> Result<(), String> {
+        let mut cards = self.cards.clone();
+        for c in cards.iter_mut().filter(|c| c.role == Role::Special) {
+            c.allowed = allowed;
+        }
+        self.replace(cards)
+    }
+
     /// "Everyone's here": clear `away` on every card.
     pub fn clear_away(&mut self) -> Result<(), String> {
         let mut cards = self.cards.clone();
@@ -217,11 +244,20 @@ pub fn validate(cards: Vec<Card>) -> Result<Vec<Card>, String> {
         }
         let color = normalize_color(&card.color)?;
         let image = card.image.clone().filter(|u| is_image_url(u));
+        let role = if card.legacy_trick && card.role == Role::Normal {
+            Role::Trick
+        } else {
+            card.role
+        };
+        let allowed = card.allowed && role == Role::Special;
         out.push(Card {
             canonical_id,
             aliases,
             color,
             image,
+            role,
+            legacy_trick: false,
+            allowed,
             ..card
         });
     }
@@ -267,7 +303,9 @@ mod tests {
                 hex: "#1e5bd8".into(),
                 name: "Blue".into(),
             },
-            trick: false,
+            role: Role::Normal,
+            legacy_trick: false,
+            allowed: false,
             image: None,
             away: false,
         }
@@ -334,14 +372,38 @@ mod tests {
     }
 
     #[test]
-    fn trick_defaults_to_false_and_round_trips() {
-        let json = r##"[{"canonical_id":"04A1B2C3D4E5F6","emoji":"🐧","label":"Penguin","color":{"hex":"#1E5BD8","name":"Blue"}}]"##;
-        let mut cards: Vec<Card> = serde_json::from_str(json).unwrap();
-        assert!(!cards[0].trick);
-        cards[0].trick = true;
-        let back: Vec<Card> =
-            serde_json::from_str(&serde_json::to_string(&cards).unwrap()).unwrap();
-        assert!(back[0].trick);
+    fn role_defaults_to_normal_and_legacy_trick_maps_to_trick() {
+        let json = r##"[
+            {"canonical_id":"04A1B2C3D4E5F6","emoji":"🐧","label":"Penguin","color":{"hex":"#1E5BD8","name":"Blue"}},
+            {"canonical_id":"04999999999999","emoji":"🦁","label":"Lion","color":{"hex":"#FDD835","name":"Yellow"},"trick":true},
+            {"canonical_id":"04888888888888","emoji":"⭐","label":"Star","color":{"hex":"#FDD835","name":"Yellow"},"role":"special"}
+        ]"##;
+        let cards = validate(serde_json::from_str(json).unwrap()).unwrap();
+        assert_eq!(cards[0].role, Role::Normal);
+        assert_eq!(cards[1].role, Role::Trick);
+        assert_eq!(cards[2].role, Role::Special);
+        assert!(!cards[2].allowed);
+        let saved = serde_json::to_string(&cards).unwrap();
+        assert!(saved.contains(r#""role":"trick""#), "{saved}");
+        assert!(!saved.contains(r#""trick":"#), "{saved}");
+    }
+
+    #[test]
+    fn set_allowed_for_specials_persists() {
+        let mut reg = temp_registry("allowed");
+        let mut star = card("04888888888888", &[], "⭐");
+        star.role = Role::Special;
+        reg.replace(vec![card("04A1B2C3D4E5F6", &[], "🐧"), star])
+            .unwrap();
+        reg.set_allowed_for_specials(true).unwrap();
+        let reloaded = Registry::load(reg.path().to_path_buf()).unwrap();
+        assert!(
+            !reloaded.cards()[0].allowed,
+            "normal cards are never allowed-flagged"
+        );
+        assert!(reloaded.cards()[1].allowed);
+        reg.set_allowed_for_specials(false).unwrap();
+        assert!(!reg.cards()[1].allowed);
     }
 
     #[test]

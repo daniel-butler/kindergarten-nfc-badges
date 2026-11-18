@@ -1,4 +1,5 @@
 mod ids;
+mod presenter;
 mod registry;
 mod taps;
 
@@ -22,6 +23,7 @@ use tokio_stream::Stream;
 use tokio_stream::StreamExt;
 use tokio_stream::wrappers::BroadcastStream;
 
+use presenter::{PresenterState, parse_command};
 use registry::{Card, ImageError, MAX_IMAGE_BYTES, Registry};
 use taps::{Linker, Source, TapEvent};
 
@@ -33,11 +35,13 @@ struct Assets;
 enum Broadcast {
     Tap(Box<TapEvent>),
     Cards(Vec<Card>),
+    Command(&'static str),
 }
 
 struct Inner {
     registry: Registry,
     linker: Linker,
+    presenter: PresenterState,
 }
 
 #[derive(Clone)]
@@ -71,8 +75,13 @@ async fn tap(
     })?;
     let (event, cards) = {
         let mut inner = state.inner.lock().unwrap();
-        let Inner { registry, linker } = &mut *inner;
+        let Inner {
+            registry,
+            linker,
+            presenter,
+        } = &mut *inner;
         let outcome = linker.handle(registry, &canonical_id, req.source, Instant::now());
+        presenter.observe(&req.id, outcome.card.as_ref(), now_ms());
         let event = TapEvent {
             raw_id: req.id,
             canonical_id,
@@ -100,6 +109,9 @@ async fn events(
         let event = match msg.ok()? {
             Broadcast::Tap(t) => Event::default().event("tap").json_data(t),
             Broadcast::Cards(c) => Event::default().event("cards").json_data(c),
+            Broadcast::Command(action) => Event::default()
+                .event("command")
+                .json_data(serde_json::json!({ "action": action })),
         };
         event.ok().map(Ok)
     });
@@ -198,6 +210,53 @@ async fn put_card_image(
         })
     })
     .map(Json)
+}
+
+async fn get_presenter(State(state): State<AppState>) -> Json<PresenterState> {
+    Json(state.inner.lock().unwrap().presenter.clone())
+}
+
+#[derive(Deserialize)]
+struct CommandRequest {
+    action: String,
+}
+
+/// A key press or a phone button: apply the server's part, then tell the page.
+async fn command(
+    State(state): State<AppState>,
+    Json(req): Json<CommandRequest>,
+) -> Result<Json<serde_json::Value>, ApiError> {
+    let action = parse_command(&req.action).ok_or_else(|| {
+        (
+            StatusCode::BAD_REQUEST,
+            format!("unknown command {:?}", req.action),
+        )
+    })?;
+    let cards = {
+        let mut inner = state.inner.lock().unwrap();
+        match action {
+            "allow-special" | "reset" => {
+                inner
+                    .registry
+                    .set_allowed_for_specials(action == "allow-special")
+                    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+                if action == "reset" {
+                    inner.presenter = PresenterState::default();
+                }
+                Some(inner.registry.cards().to_vec())
+            }
+            "let-in" | "keep-out" => {
+                inner.presenter.clear_trick();
+                None
+            }
+            _ => None,
+        }
+    };
+    if let Some(cards) = cards {
+        let _ = state.tx.send(Broadcast::Cards(cards));
+    }
+    let _ = state.tx.send(Broadcast::Command(action));
+    Ok(Json(serde_json::json!({ "ok": true })))
 }
 
 async fn clear_away(State(state): State<AppState>) -> Result<Json<Vec<Card>>, ApiError> {
@@ -350,6 +409,7 @@ async fn main() {
         inner: Arc::new(Mutex::new(Inner {
             registry,
             linker: Linker::default(),
+            presenter: PresenterState::default(),
         })),
         tx,
     };
@@ -362,6 +422,8 @@ async fn main() {
         )
         .route("/api/cards/resolve", get(resolve_card))
         .route("/api/cards/clear-away", post(clear_away))
+        .route("/api/presenter", get(get_presenter))
+        .route("/api/command", post(command))
         .route(
             "/api/cards/{id}/image",
             put(put_card_image).layer(DefaultBodyLimit::max(MAX_IMAGE_BYTES + 1024)),

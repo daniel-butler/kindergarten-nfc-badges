@@ -139,7 +139,9 @@ mod tests {
                 hex: "#1E5BD8".into(),
                 name: "Blue".into(),
             },
-            trick: false,
+            role: crate::registry::Role::Normal,
+            legacy_trick: false,
+            allowed: false,
             image: None,
             away: false,
         }])

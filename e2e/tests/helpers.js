@@ -1,14 +1,15 @@
 const { expect } = require('@playwright/test');
 
 const PENGUIN = { canonical_id: '04A1B2C3D4E5F6', emoji: '🐧', label: 'Penguin', color: { hex: '#1E5BD8', name: 'Blue' } };
+const STAR_SPECIAL = { canonical_id: '04D00D1ED00D1E', emoji: '⭐', label: 'Star', color: { hex: '#FDD835', name: 'Yellow' }, role: 'special' };
 const LION = { canonical_id: '04AABBCCDDEEFF', emoji: '🦁', label: 'Lion', color: { hex: '#FDD835', name: 'Yellow' } };
-const FOX_TRICK = { canonical_id: '04CAFEF00DBEEF', emoji: '🦊', label: 'Fox', color: { hex: '#E53935', name: 'Red' }, trick: true };
+const FOX_TRICK = { canonical_id: '04CAFEF00DBEEF', emoji: '🦊', label: 'Fox', color: { hex: '#E53935', name: 'Red' }, role: 'trick' };
 
 /** n distinct cards whose 4-byte prefixes/suffixes never collide. */
 function manyCards(n) {
   return Array.from({ length: n }, (_, i) => {
     const b = (i + 16).toString(16).toUpperCase();
-    return { canonical_id: `04${b.repeat(6)}`, emoji: '🐶', label: `Dog ${i + 1}`, color: { hex: '#1E5BD8', name: 'Blue' }, trick: i % 9 === 8 };
+    return { canonical_id: `04${b.repeat(6)}`, emoji: '🐶', label: `Dog ${i + 1}`, color: { hex: '#1E5BD8', name: 'Blue' }, role: i % 9 === 8 ? 'trick' : 'normal' };
   });
 }
 
@@ -74,4 +75,10 @@ const scene = (page) => page.locator('#scene');
 /** Debug-log rows for real taps (not notes). */
 const tapRows = (page, source) => scene(page).locator('tr', { hasText: source === 'phone' ? '📱 phone' : '⌨️ reader' });
 
-module.exports = { PNG_1PX, uploadImage, reloadPage, PENGUIN, LION, FOX_TRICK, manyCards, setCards, getCards, phoneTap, setLinkMode, openScene, readerScan, humanType, scene, tapRows };
+module.exports = { STAR_SPECIAL, PNG_1PX, uploadImage, reloadPage, PENGUIN, LION, FOX_TRICK, manyCards, setCards, getCards, phoneTap, setLinkMode, openScene, readerScan, humanType, scene, tapRows };
+
+async function command(request, action) {
+  const res = await request.post('/api/command', { data: { action } });
+  return res;
+}
+module.exports.command = command;
