@@ -66,11 +66,34 @@ test('unknown badge: gentle retry, no buzzer, nobody enters', async ({ page, req
   await openScene(page, 'zoo', 4);
   await spyBuzzer(page);
   await phoneTap(request, 'DEADBEEF');
+  await expect.poll(() => gatekeeper(page)).toBe('puzzled'); // a blank card hops up; the goose tilts its head
+  expect((await zooState(page)).visitor).toBe('?');
   await expect(page.locator('.zoo-oops')).toHaveText('Oops! Tap again 🔄');
   await expect(page.locator('.zoo-denied')).toHaveCount(0);
   expect(await page.evaluate(() => window.__buzzes)).toBe(0);
   expect(await zooState(page)).toMatchObject({ inside: [], queued: 0, finale: false, tally: 0 });
   await expect(page.locator('.zoo-oops')).toHaveCount(0, { timeout: 3000 });
+});
+
+test('tapping again when already inside: that animal runs to the gate and waves', async ({ page, request }) => {
+  await openScene(page, 'zoo', 4);
+  await phoneTap(request, PENGUIN.canonical_id);
+  await expect.poll(async () => (await zooState(page)).queued + (await zooState(page)).inside.length, { timeout: 15000 }).toBe(1);
+  await expect.poll(() => gatekeeper(page), { timeout: 15000 }).toBe('idle');
+  await page.waitForTimeout(1600); // same badge within 1.5 s is a repeat
+  await phoneTap(request, PENGUIN.canonical_id);
+  await expect.poll(async () => (await zooState(page)).waving).toEqual([PENGUIN.canonical_id]);
+  await expect.poll(async () => (await zooState(page)).waving, { timeout: 6000 }).toEqual([]);
+  expect((await zooState(page)).tally).toBe(1);
+});
+
+test('the party: balloons rise and the goose dances before the title shows', async ({ page }) => {
+  await openScene(page, 'zoo', 4);
+  await page.keyboard.press('Alt+s');
+  await expect.poll(async () => (await zooState(page)).models.balloons).toBeGreaterThan(0);
+  expect((await zooState(page)).gatekeeper).toBe('dancing');
+  await expect(page.locator('.zoo3d-finale')).toHaveCount(0);
+  await expect(page.locator('.zoo3d-finale')).toContainText('Congratulations, Official Zookeepers!', { timeout: 10000 });
 });
 
 test('a not-here-today kid who taps goes in and adds a mark', async ({ page, request }) => {
@@ -316,6 +339,7 @@ test.describe('special badge finale', () => {
     await expect.poll(() => inside(page), { timeout: 15000 }).toContain(PENGUIN.canonical_id);
     await tapStar(request);
     await page.keyboard.press('Alt+a');
+    await expect.poll(async () => (await zooState(page)).models.clipboard).toBe(true); // the goose holds up its clipboard
     const list = page.locator('.zoo-list');
     await expect(list).toBeVisible();
     await expect(list).toContainText('📋 Zoo List');
@@ -330,7 +354,8 @@ test.describe('special badge finale', () => {
     await phoneTap(request, PENGUIN.canonical_id);
     await expect(tally(page, 1)).toBeVisible();
     await command(request, 'allow-special');
-    await expect(page.locator('.zoo-list')).toBeVisible();
+    // The list waits for the penguin's arrival to finish rather than covering it.
+    await expect(page.locator('.zoo-list')).toBeVisible({ timeout: 15000 });
     await tapStar(request);
     await expect(page.locator('.zoo-list')).toHaveCount(0);
     await expect(tally(page, 2)).toBeVisible();

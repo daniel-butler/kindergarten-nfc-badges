@@ -72,7 +72,10 @@ card.
   in a row queue up and arrive faster.
 - **Tally:** marks at the top, in groups of five. One mark for each normal entry, each trick badge
   voted in, and the special badge.
-- **Unknown badge:** a small "Oops! Tap again 🔄" with a soft boop. Nobody goes in.
+- **Unknown badge:** a blank "?" card hops up to the gate and the goose tilts its head, then a
+  small "Oops! Tap again 🔄" with a soft boop. Nobody goes in.
+- **Tapping again when already inside:** that animal runs to the gate and waves hello through the
+  bars.
 - **🪿 The gatekeeper goose** stands beside the gate the whole time, nodding while it keeps watch.
 - **🎭 Trick badge:** its sticker walks up to the gate and the goose tilts its head at it. Then the
   vote card shows its stored animal and color with a bouncing "?" and 👍 Let in / 👎 Keep out. Kids
@@ -86,10 +89,13 @@ card.
 - **⭐ Special badge:**
   - At first it's denied: it peeks at the gate, a big gold padlock pops onto the doors and wobbles,
     and the goose honks and shakes its head.
-  - Press **⌥A** (Allow): the **Zoo List** pops up with everyone inside, and a pencil scribbles the
-    special badge in.
+  - Press **⌥A** (Allow): the goose holds up its clipboard at the gate, then the **Zoo List** pops
+    up with everyone inside, and a pencil scribbles the special badge in. (If an animal is still
+    walking in, the list waits for it.) **⌥L** shows the list the same way.
   - The special badge's next tap walks it in, adds a mark, and **starts the party**. **⌥S** starts
     the party any time.
+- **🎉 Party:** balloons float up, everyone dances in a ring with the goose in the middle, then
+  "Congratulations, Official Zookeepers!" appears.
 - **Saved:** check-ins survive a page reload. **⌥R ⌥R**, or Reset on the phone, clears everything
   and denies the special badge again.
 
