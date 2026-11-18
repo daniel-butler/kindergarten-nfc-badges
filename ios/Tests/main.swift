@@ -38,17 +38,27 @@ check(TapClient.cardstockColors.contains(ColorDTO(hex: "#1E5BD8", name: "Blue"))
 
 let minimal = ##"{"canonical_id":"04A1","aliases":[],"emoji":"🐼","label":"Panda","color":{"hex":"#1E5BD8","name":"Blue"}}"##
 let decoded = try! JSONDecoder().decode(CardDTO.self, from: Data(minimal.utf8))
-check(decoded.trick == false && decoded.away == false && decoded.image == nil, "CardDTO defaults")
-let full = ##"{"canonical_id":"04A1","aliases":["X"],"emoji":"🐼","label":"Panda","color":{"hex":"#1E5BD8","name":"Blue"},"trick":true,"away":true,"image":"/images/04A1.png?v=1"}"##
+check(decoded.role == "normal" && decoded.away == false && decoded.image == nil, "CardDTO defaults")
+let full = ##"{"canonical_id":"04A1","aliases":["X"],"emoji":"🐼","label":"Panda","color":{"hex":"#1E5BD8","name":"Blue"},"role":"special","allowed":true,"away":true,"image":"/images/04A1.png?v=1"}"##
 let decodedFull = try! JSONDecoder().decode(CardDTO.self, from: Data(full.utf8))
-check(decodedFull.trick && decodedFull.away && decodedFull.image == "/images/04A1.png?v=1", "CardDTO full decode")
+check(decodedFull.role == "special" && decodedFull.allowed && decodedFull.away && decodedFull.image == "/images/04A1.png?v=1", "CardDTO full decode")
+let legacy = ##"{"canonical_id":"04A1","emoji":"🐼","label":"Panda","color":{"hex":"#1E5BD8","name":"Blue"},"trick":true}"##
+check((try? JSONDecoder().decode(CardDTO.self, from: Data(legacy.utf8)))?.role == "trick", "legacy trick decodes as role trick")
 let encoded = try! JSONSerialization.jsonObject(with: JSONEncoder().encode(decodedFull)) as! [String: Any]
-check(encoded["trick"] as? Bool == true && encoded["away"] as? Bool == true, "CardDTO encodes trick and away")
+check(encoded["role"] as? String == "special" && encoded["away"] as? Bool == true && encoded["trick"] == nil, "CardDTO encodes role and away")
+
+let presenterJSON = ##"{"waiting":{"kind":"trick","card":{"canonical_id":"04A1","aliases":[],"emoji":"🦊","label":"Fox","color":{"hex":"#E53935","name":"Red"},"role":"trick"},"raw_id":"04a1","ts":1},"last_unknown":{"raw_id":"DEADBEEF","ts":2}}"##
+let presenter = try? JSONDecoder().decode(PresenterDTO.self, from: Data(presenterJSON.utf8))
+check(presenter?.waiting?.kind == "trick" && presenter?.waiting?.card.label == "Fox" && presenter?.last_unknown?.raw_id == "DEADBEEF", "PresenterDTO decode")
+let emptyPresenter = try? JSONDecoder().decode(PresenterDTO.self, from: Data(#"{"waiting":null,"last_unknown":null}"#.utf8))
+check(emptyPresenter != nil && emptyPresenter?.waiting == nil, "PresenterDTO decodes nulls")
+check(TapClient.shortcuts.contains { $0.key == "⌥A" && $0.action.contains("Allow") }, "shortcuts list ⌥A Allow special")
+check(TapClient.shortcuts.contains { $0.key == "⌥R ⌥R" }, "shortcuts list the reset double press")
 
 if let server = ProcessInfo.processInfo.environment["BADGE_SERVER"] {
     let registered = DispatchSemaphore(value: 0)
     Task {
-        let card = CardDTO(canonical_id: "04C0FFEE123456", emoji: "🐼", label: "Panda", color: ColorDTO(hex: "#1E5BD8", name: "Blue"))
+        let card = CardDTO(canonical_id: "04C0FFEE123456", emoji: "🐼", label: "Panda", color: ColorDTO(hex: "#1E5BD8", name: "Blue"), role: "trick")
         switch await TapClient.upsert(card, server: server) {
         case .success(let saved): check(saved.canonical_id == "04C0FFEE123456", "upsert returns the card")
         case .failure(let error): check(false, "upsert failed: \(error.localizedDescription)")
@@ -61,6 +71,17 @@ if let server = ProcessInfo.processInfo.environment["BADGE_SERVER"] {
         switch await TapClient.uploadImage(png, id: "04C0FFEE123456", server: server) {
         case .success(let c): check(c.image?.hasPrefix("/images/04C0FFEE123456.png?v=") == true, "upload sets image")
         case .failure(let error): check(false, "upload failed: \(error.localizedDescription)")
+        }
+        if case .failure(let error) = await TapClient.command("party", server: server) {
+            check(false, "party command failed: \(error.localizedDescription)")
+        }
+        if case .success = await TapClient.command("nope", server: server) {
+            check(false, "unknown command should fail")
+        }
+        _ = await TapClient.post(id: "04C0FFEE123456", server: server)
+        switch await TapClient.presenter(server: server) {
+        case .success(let p): check(p.waiting?.kind == "trick" && p.waiting?.card.label == "Panda", "presenter shows the waiting trick")
+        case .failure(let error): check(false, "presenter failed: \(error.localizedDescription)")
         }
         registered.signal()
     }

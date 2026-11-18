@@ -23,7 +23,7 @@ struct RegisterView: View {
     @State private var cameraTarget: (id: String, existing: CardDTO?)?
     @State private var name = ""
     @State private var color: ColorDTO?
-    @State private var trick = false
+    @State private var role = "normal"
     private let haptics = UINotificationFeedbackGenerator()
 
     var body: some View {
@@ -92,7 +92,7 @@ struct RegisterView: View {
     private func startDetails(id: String, existing: CardDTO?) {
         name = existing?.label ?? ""
         color = existing?.color
-        trick = existing?.trick ?? false
+        role = existing?.role ?? "normal"
         step = .details(id: id, existing: existing)
     }
 
@@ -109,7 +109,8 @@ struct RegisterView: View {
             emoji: TapClient.emoji(forName: name),
             label: name.trimmingCharacters(in: .whitespaces),
             color: color,
-            trick: trick,
+            role: role,
+            allowed: existing?.allowed ?? false,
             away: existing?.away ?? false,
             image: existing?.image)
         let png = cutout?.pngData()
@@ -151,7 +152,8 @@ struct RegisterView: View {
                 Circle().fill(Color(hex: card.color.hex)).frame(width: 26, height: 26)
                     .overlay(Circle().stroke(.primary.opacity(0.4)))
                 Text(card.color.name)
-                if card.trick { Text("· 🎭 Trick") }
+                if card.role == "trick" { Text("· 🎭 Trick") }
+                if card.role == "special" { Text("· ⭐ Special") }
             }
             Toggle("💤 Not here today", isOn: Binding(get: { card.away }, set: { setAway(card, $0) }))
                 .font(.title3.bold())
@@ -200,7 +202,12 @@ struct RegisterView: View {
             }
             Text(color.map { "Cardstock: \($0.name)" } ?? "Pick the badge's cardstock color")
                 .font(.footnote).foregroundStyle(.secondary)
-            Toggle("🎭 Trick badge", isOn: $trick).padding(.horizontal)
+            Picker("Role", selection: $role) {
+                Text("Normal").tag("normal")
+                Text("🎭 Trick").tag("trick")
+                Text("⭐ Special").tag("special")
+            }
+            .pickerStyle(.segmented)
             bigButton("💾 Save", tint: .green) { save(id: id, existing: existing) }
                 .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty || color == nil)
             Button("Cancel") { step = .idle }

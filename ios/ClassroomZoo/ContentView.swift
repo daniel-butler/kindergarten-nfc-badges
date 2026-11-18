@@ -4,11 +4,12 @@ struct ContentView: View {
     @AppStorage("serverURL") private var serverURL = "http://172.20.10.2:8080"
     @StateObject private var scanner = NFCScanner()
     @State private var connection: String?
-    @State private var mode = Mode.checkIn
+    @AppStorage("mode") private var mode = Mode.checkIn
 
     private enum Mode: String, CaseIterable {
         case checkIn = "Check in"
         case register = "Register"
+        case presenter = "Presenter"
     }
 
     var body: some View {
@@ -51,10 +52,10 @@ struct ContentView: View {
                 .pickerStyle(.segmented)
                 .onChange(of: mode) { scanner.stop() }
 
-                if mode == .register {
-                    RegisterView(server: serverURL, scanner: scanner)
-                } else {
-                    checkInView
+                switch mode {
+                case .register: RegisterView(server: serverURL, scanner: scanner)
+                case .presenter: PresenterView(server: serverURL)
+                case .checkIn: checkInView
                 }
             }
             .padding()

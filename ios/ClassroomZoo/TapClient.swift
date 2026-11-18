@@ -12,33 +12,63 @@ struct CardDTO: Codable, Equatable {
     var emoji: String
     var label: String
     var color: ColorDTO
-    var trick: Bool
+    /// "normal", "trick" or "special".
+    var role: String
+    /// Special badges stay out of the zoo until the presenter allows them.
+    var allowed: Bool
     var away: Bool
     var image: String?
 
+    private enum CodingKeys: String, CodingKey {
+        case canonical_id, aliases, emoji, label, color, role, allowed, away, image
+    }
+
+    private enum LegacyKeys: String, CodingKey {
+        case trick
+    }
+
     init(canonical_id: String, aliases: [String] = [], emoji: String, label: String, color: ColorDTO,
-         trick: Bool = false, away: Bool = false, image: String? = nil) {
+         role: String = "normal", allowed: Bool = false, away: Bool = false, image: String? = nil) {
         self.canonical_id = canonical_id
         self.aliases = aliases
         self.emoji = emoji
         self.label = label
         self.color = color
-        self.trick = trick
+        self.role = role
+        self.allowed = allowed
         self.away = away
         self.image = image
     }
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
+        let legacyTrick = try decoder.container(keyedBy: LegacyKeys.self).decodeIfPresent(Bool.self, forKey: .trick) ?? false
         canonical_id = try c.decode(String.self, forKey: .canonical_id)
         aliases = try c.decodeIfPresent([String].self, forKey: .aliases) ?? []
         emoji = try c.decode(String.self, forKey: .emoji)
         label = try c.decode(String.self, forKey: .label)
         color = try c.decode(ColorDTO.self, forKey: .color)
-        trick = try c.decodeIfPresent(Bool.self, forKey: .trick) ?? false
+        role = try c.decodeIfPresent(String.self, forKey: .role) ?? (legacyTrick ? "trick" : "normal")
+        allowed = try c.decodeIfPresent(Bool.self, forKey: .allowed) ?? false
         away = try c.decodeIfPresent(Bool.self, forKey: .away) ?? false
         image = try c.decodeIfPresent(String.self, forKey: .image)
     }
+}
+
+/// What the Presenter tab shows: the badge waiting for a decision, and the last unknown badge.
+struct PresenterDTO: Decodable {
+    struct Waiting: Decodable {
+        let kind: String
+        let card: CardDTO
+        let raw_id: String
+    }
+
+    struct Unknown: Decodable {
+        let raw_id: String
+    }
+
+    let waiting: Waiting?
+    let last_unknown: Unknown?
 }
 
 /// Talks to the badge server. Foundation-only so it can be checked on a Mac without a phone.
@@ -185,6 +215,31 @@ enum TapClient {
         request.setValue("image/png", forHTTPHeaderField: "Content-Type")
         request.httpBody = png
         return decoded(await send(request), as: CardDTO.self)
+    }
+
+    /// Mac keyboard shortcuts on the projector page (Option = ⌥), the fallback when the phone can't reach the Mac.
+    static let shortcuts: [(key: String, action: String)] = [
+        ("⌥1", "Setup"), ("⌥2", "Secret Number"), ("⌥3", "Zoo (3D)"), ("⌥4", "The List"),
+        ("⌥5", "Who has the ___?"), ("⌥6", "Zoo Gate (2D backup)"), ("⌥0", "Debug"),
+        ("⌥L", "Show / hide the Zoo List"), ("⌥Y", "Let it in (trick vote)"), ("⌥N", "Keep it out (trick vote)"),
+        ("⌥A", "Allow special badge"), ("⌥S", "Start the party (zoo) · next animal (Who has)"),
+        ("⌥R ⌥R", "Reset the zoo (press twice)"), ("⌥P", "Presenter panel"), ("⌥F", "Fullscreen"),
+        ("⌥M", "Mute"), ("⌥T", "Typing test mode"),
+    ]
+
+    /// Run a presenter command on the projector page (same as its keyboard shortcut).
+    static func command(_ action: String, server: String) async -> Result<Void, Error> {
+        guard let url = endpoint(server: server, path: "/api/command") else { return .failure(Failure.badURL(server)) }
+        var request = URLRequest(url: url, timeoutInterval: 4)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try? JSONSerialization.data(withJSONObject: ["action": action])
+        return await send(request).map { _ in () }
+    }
+
+    static func presenter(server: String) async -> Result<PresenterDTO, Error> {
+        guard let url = endpoint(server: server, path: "/api/presenter") else { return .failure(Failure.badURL(server)) }
+        return decoded(await send(URLRequest(url: url, timeoutInterval: 3)), as: PresenterDTO.self)
     }
 
     /// GET /api/cards; returns a one-line status for the "Test connection" button.
