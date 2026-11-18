@@ -2,6 +2,10 @@
 
 Date: 2026-11-17 · Presentation: Thursday 2026-11-19 · Class: ~18 kindergarteners
 
+> **Update 2026-11-18:** the ACCESS DENIED overlay, the "N of M animals are home" counter and the
+> "everyone present is in" party trigger are superseded by
+> `2026-11-18-zoo-gatekeeping-design.md` (gentle retry, tally, trick votes, special-badge finale).
+>
 > **Update 2026-11-17:** the presenter asked for **no spoken voice at all**. Every voice line
 > below ("Welcome, Panda!", "Access denied!", the finale) is shown as text or carried by sound
 > effects instead; nothing is spoken.
