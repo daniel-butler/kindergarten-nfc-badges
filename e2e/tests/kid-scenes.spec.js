@@ -88,15 +88,22 @@ test.describe('The List', () => {
     await expect(page.locator('.list-row.hit')).toHaveCount(1);
   });
 
-  test('reader-format ids are looked up too; unknown ids are not on the list', async ({ page, request }) => {
+  test('reader-format ids are looked up too; unknown ids get a gentle retry', async ({ page, request }) => {
     await openScene(page, 'list', 3);
     await readerScan(page, 'C3B2A104');
     await expect(page.locator(`.list-row.hit[data-id="${PENGUIN.canonical_id}"]`)).toBeVisible({ timeout: 3000 });
     await expect(page.locator('.list-lookup')).toContainText('C3B2A104');
 
+    await page.evaluate(() => {
+      window.__buzzes = 0;
+      const s = window.Badge.sound;
+      for (const name of ['buzzer', 'silly']) { const o = s[name]; s[name] = () => { window.__buzzes++; o(); }; }
+    });
     await phoneTap(request, 'DEADBEEF');
-    await expect(page.locator('.list-lookup')).toContainText('Not on the list!', { timeout: 3000 });
-    await expect(page.locator('.list-row.hit')).toHaveCount(0);
+    await expect(page.locator('.zoo-oops')).toHaveText('Oops! Tap again 🔄');
+    await page.waitForTimeout(500);
+    await expect(page.locator('.list-lookup')).not.toContainText('Not on the list');
+    expect(await page.evaluate(() => window.__buzzes)).toBe(0);
   });
 });
 
@@ -119,6 +126,15 @@ test.describe('Who has the ___?', () => {
     await expect(scene(page)).toContainText(`It's the ${first.label}!`);
     await expect(page.locator('.who-target')).toBeVisible({ timeout: 6000 });
     expect(await targetId(page)).not.toBe(first.canonical_id);
+  });
+
+  test('an unknown badge gets a gentle retry, not a Nope', async ({ page, request }) => {
+    await openScene(page, 'who', 3);
+    const first = await page.locator('.who-target').getAttribute('data-id');
+    await phoneTap(request, 'DEADBEEF');
+    await expect(page.locator('.zoo-oops')).toHaveText('Oops! Tap again 🔄');
+    await expect(scene(page)).not.toContainText('Nope!');
+    await expect(page.locator('.who-target')).toHaveAttribute('data-id', first);
   });
 
   test('presenter key skips to a different animal', async ({ page }) => {

@@ -1,5 +1,5 @@
 const { test, expect } = require('@playwright/test');
-const { PENGUIN, LION, setCards, getCards, phoneTap, setLinkMode, openScene, readerScan, scene } = require('./helpers');
+const { FOX_TRICK, command, PENGUIN, LION, setCards, getCards, phoneTap, setLinkMode, openScene, readerScan, scene } = require('./helpers');
 
 test.beforeEach(async ({ request }) => {
   await setLinkMode(request, false);
@@ -127,6 +127,24 @@ test.describe('Debug and presenter panel', () => {
     await expect(row).toContainText('📱 phone');
     await expect(row).toContainText('F6E5D4C3B2A104');
     await expect(row).toContainText('Penguin');
+  });
+
+  test('panel shows the last unknown badge and has the zoo command buttons', async ({ page, request }) => {
+    await setCards(request, [PENGUIN, LION, FOX_TRICK]);
+    await command(request, 'reset');
+    await openScene(page, 'zoo', 3);
+    await phoneTap(request, 'DEADBEEF');
+    await page.keyboard.press('Alt+p');
+    const panel = page.locator('#panel');
+    await expect(panel).toContainText('Last unknown: DEADBEEF');
+    for (const label of ['📋 Zoo List', '👍 Let it in', '👎 Keep it out', '⭐ Allow special', '🔄 Reset the zoo']) {
+      await expect(panel.locator('button', { hasText: label })).toHaveCount(1);
+    }
+    await page.waitForTimeout(1600);
+    await phoneTap(request, FOX_TRICK.canonical_id);
+    await expect(page.locator('.zoo-vote')).toBeVisible();
+    await panel.locator('button', { hasText: '👍 Let it in' }).click();
+    await expect(page.locator('.zoo-tally[data-count="1"]')).toBeVisible();
   });
 
   test('panel lists scenes and switches between them', async ({ page }) => {

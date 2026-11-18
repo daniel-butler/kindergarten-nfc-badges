@@ -272,6 +272,7 @@ const Badge = (() => {
   const api = {
     cards: [],
     log,
+    lastUnknown: null,
     ANIMALS,
     COLORS,
     sound: Sound,
@@ -387,6 +388,10 @@ const Badge = (() => {
   api.note = (text) => addLog({ kind: 'note', text });
 
   function handleTap(ev) {
+    if (!ev.card) {
+      api.lastUnknown = ev.raw_id;
+      Panel.render();
+    }
     const key = ev.card ? ev.card.canonical_id : ev.canonical_id;
     const now = performance.now();
     ev.repeat = lastTap.key === key && now - lastTap.at < REPEAT_WINDOW_MS;
@@ -536,8 +541,15 @@ const Panel = (() => {
       button('Silly buzzer', null, () => Sound.silly()),
       button('Fanfare', null, () => Sound.fanfare()),
       button('Confetti', null, () => Confetti.burst()),
+      el('h2', {}, 'Zoo'),
+      button('📋 Zoo List', '⌥L', () => Commands.send('toggle-list')),
+      button('👍 Let it in', '⌥Y', () => Commands.send('let-in')),
+      button('👎 Keep it out', '⌥N', () => Commands.send('keep-out')),
+      button('⭐ Allow special', '⌥A', () => Commands.send('allow-special')),
+      button('🔄 Reset the zoo', '⌥R ⌥R', () => Commands.send('reset')),
       el('h2', {}, 'Status'),
       el('div', {}, `${Badge.connected ? '🟢 Connected' : '🔴 Disconnected'} · ${Badge.cards.length} cards`),
+      Badge.lastUnknown ? el('div', { class: 'mono' }, `Last unknown: ${Badge.lastUnknown}`) : null,
       button('Close', '⌥P', toggle),
     ].filter(Boolean));
   }
@@ -1349,7 +1361,6 @@ Badge.registerScene((() => {
     },
     onSkip: () => Commands.send('party'),
     skipLabel: '🎉 Start the party',
-    actions: [{ label: '🔄 Reset the zoo', run: () => Commands.send('reset') }],
     onCommand: (action) => flow.command(action),
     state: () => ({
       inside: insideCards().map((c) => c.canonical_id),
@@ -1444,6 +1455,7 @@ Badge.registerScene((() => {
     },
     onCards: () => render(),
     onTap(ev) {
+      if (!ev.card) return zooRetry(root);
       for (const t of scanTimers) Badge.cancel(t);
       lookup = { raw: ev.raw_id, card: ev.card, searching: true };
       hitId = null;
@@ -1542,6 +1554,7 @@ Badge.registerScene((() => {
     },
     onTap(ev) {
       if (celebrating || !target) return;
+      if (!ev.card) return zooRetry(root);
       Badge.cancel(timer);
       if (ev.card?.canonical_id === target.canonical_id) {
         celebrating = true;
@@ -2166,7 +2179,6 @@ Badge.registerScene((() => {
       if (w) syncAnimals();
     },
     onSkip: () => Commands.send('party'),
-    actions: [{ label: '🔄 Reset the zoo', run: () => Commands.send('reset') }],
     onCommand: (action) => flow.command(action),
     onTap: (ev) => flow.tap(ev),
     state: () => ({
