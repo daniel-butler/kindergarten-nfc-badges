@@ -513,8 +513,9 @@ const Badge = (() => {
     });
     es.addEventListener('command', (e) => {
       remember(e);
-      PageLog.log(`command ${JSON.parse(e.data).action}`);
-      Commands.run(JSON.parse(e.data).action);
+      const { action, card } = JSON.parse(e.data);
+      PageLog.log(`command ${action}${card ? ` for ${card}` : ''}`);
+      Commands.run(action, card);
     });
   }
 
@@ -994,15 +995,12 @@ const ZooStore = (() => {
   };
 })();
 
-/** What a tap means in a zoo scene: 'unknown' | 'inside' | 'vote' | 'kept-out' | 'special-denied' | 'enter'. */
+/** What a tap means in a zoo scene: 'unknown' | 'inside' | 'vote' | 'special-denied' | 'enter'. */
 function zooDecide(state, card) {
   if (!card) return 'unknown';
   if (state.checkedIn.includes(card.canonical_id) && !card.away) return 'inside';
-  if (card.role === 'trick') {
-    const verdict = state.tricks[card.canonical_id];
-    if (verdict === 'out') return 'kept-out';
-    if (verdict !== 'in') return 'vote';
-  }
+  // A trick badge that was kept out gets a new vote: kept out isn't final.
+  if (card.role === 'trick' && state.tricks[card.canonical_id] !== 'in') return 'vote';
   if (card.role === 'special' && !card.allowed) return 'special-denied';
   return 'enter';
 }
@@ -1090,18 +1088,36 @@ function scribbleMark() {
 }
 
 /** The Zoo List: everyone inside, plus allowed special badges (scribbled in when `scribble`). */
+/** Where a badge stands on the Zoo List: 'in' ✅, 'waiting' (empty box: on the list, not in yet),
+ * 'unlisted' ❌ (special not allowed yet, or a trick voted out), 'away' 💤 (not here today). */
+function zooListStatus(state, card) {
+  if (card.away && !state.checkedIn.includes(card.canonical_id)) return 'away';
+  if (state.checkedIn.includes(card.canonical_id)) return 'in';
+  if (card.role === 'special' && !card.allowed) return 'unlisted';
+  if (card.role === 'trick' && state.tricks[card.canonical_id] === 'out') return 'unlisted';
+  return 'waiting';
+}
+
+const ZOO_LIST_MARK = { in: '✅', waiting: '', unlisted: '❌', away: '💤' }; // waiting: an empty box
+const ZOO_LIST_ORDER = ['in', 'waiting', 'unlisted', 'away'];
+
 function zooListOverlay(state, scribble) {
-  const byId = (id) => Badge.cards.find((c) => c.canonical_id === id);
-  const inside = state.checkedIn.map(byId).filter((c) => c && !c.away);
-  const added = Badge.cards.filter((c) => c.role === 'special' && c.allowed && !state.checkedIn.includes(c.canonical_id));
+  const rows = Badge.cards
+    .map((c) => ({ c, status: zooListStatus(state, c) }))
+    .sort((a, b) => ZOO_LIST_ORDER.indexOf(a.status) - ZOO_LIST_ORDER.indexOf(b.status));
+  // The special badge just allowed gets scribbled onto the list.
+  const isNew = (c) => scribble && c.role === 'special' && c.allowed && !state.checkedIn.includes(c.canonical_id);
   return el('div', { class: 'zoo-list' },
     el('div', { class: 'zoo-list-paper' },
       el('div', { class: 'zoo-list-title' }, '📋 Zoo List'),
       el('div', { class: 'zoo-list-grid' },
-        inside.map((c) => el('div', { class: 'zoo-list-item', 'data-id': c.canonical_id }, cardArt(c, null))),
-        added.map((c) => el('div', { class: `zoo-list-item ${scribble ? 'zoo-list-new' : ''}`, 'data-id': c.canonical_id },
-          cardArt(c, null), scribble ? scribbleMark() : null)),
-        inside.length + added.length ? null : el('div', { class: 'zoo-list-empty' }, '🐾'))));
+        rows.map(({ c, status }) => el('div', {
+          class: `zoo-list-item status-${status} ${isNew(c) ? 'zoo-list-new' : ''}`,
+          'data-id': c.canonical_id,
+          'data-status': status,
+        }, cardArt(c, null), el('span', { class: `zoo-list-mark ${status === 'waiting' ? 'empty-box' : ''}` }, ZOO_LIST_MARK[status]),
+        isNew(c) ? scribbleMark() : null)),
+        rows.length ? null : el('div', { class: 'zoo-list-empty' }, '🐾'))));
 }
 
 /**
@@ -1118,6 +1134,11 @@ function createZooFlow(h) {
   let pending = null; // trick card waiting for the class vote
   let pendingSince = 0;
   let deferred = []; // taps that arrived during the vote
+  let early = null; // { letIn, cardId }: the phone decided before the vote card was up
+
+  function applyEarly() {
+    if (early && pending?.canonical_id === early.cardId) decide(early.letIn, early.cardId);
+  }
 
   function showList(scribble) {
     const show = () => {
@@ -1148,7 +1169,6 @@ function createZooFlow(h) {
         return h.unknown ? h.unknown(retry) : retry();
       }
       case 'inside': return h.inside(card);
-      case 'kept-out': return keptOut(card);
       case 'special-denied': return denied(card);
       case 'vote': {
         pending = card;
@@ -1158,6 +1178,7 @@ function createZooFlow(h) {
           pendingSince = performance.now();
           h.root().append(zooVoteOverlay(card));
           Sound.wonder();
+          if (early?.cardId === card.canonical_id) setTimeout(applyEarly, VOTE_MIN_MS);
         };
         if (h.voting) h.voting(card, show);
         else show();
@@ -1170,13 +1191,25 @@ function createZooFlow(h) {
     }
   }
 
-  function decide(letIn) {
+  /** `cardId`: the badge the decision is for (the phone's Check in buttons name it). */
+  function decide(letIn, cardId) {
     if (!pending) {
       Badge.banner('Nothing is waiting');
       return;
     }
-    // A double press would otherwise decide the next trick badge before the class sees it.
-    if (performance.now() - pendingSince < VOTE_MIN_MS) return;
+    if (cardId && cardId !== pending.canonical_id) {
+      PageLog.log(`ignored ${letIn ? 'let-in' : 'keep-out'} for ${cardId}: ${pending.canonical_id} is waiting`);
+      return;
+    }
+    const tooSoon = pendingSince + VOTE_MIN_MS - performance.now(); // Infinity until the card shows
+    if (tooSoon > 0) {
+      // A double press would otherwise decide the next trick badge before the class sees it.
+      // A decision named for this badge just waits until its card has been up a moment.
+      if (cardId) early = { letIn, cardId };
+      if (cardId && tooSoon !== Infinity) setTimeout(applyEarly, tooSoon);
+      return;
+    }
+    early = null;
     const card = pending;
     pending = null;
     h.root().querySelector('.zoo-vote')?.remove();
@@ -1212,9 +1245,9 @@ function createZooFlow(h) {
       const shown = pendingSince !== Infinity;
       if (pending && shown && !h.root().querySelector('.zoo-vote')) h.root().append(zooVoteOverlay(pending));
     },
-    command(action) {
-      if (action === 'let-in') decide(true);
-      else if (action === 'keep-out') decide(false);
+    command(action, card) {
+      if (action === 'let-in') decide(true, card);
+      else if (action === 'keep-out') decide(false, card);
       else if (action === 'party') h.party();
       else if (action === 'allow-special') showList(true);
       else if (action === 'toggle-list') {
@@ -1224,6 +1257,7 @@ function createZooFlow(h) {
       else if (action === 'reset') {
         pending = null;
         deferred = [];
+        early = null;
         h.reset();
       }
     },
@@ -1241,13 +1275,14 @@ const Commands = (() => {
   };
   const PAGE_ONLY = new Set([...Object.keys(SCENES), 'toggle-list', 'party', 'let-in', 'keep-out']);
 
-  function run(action) {
+  /** `card`: the badge a let-in / keep-out is for, when the phone named one. */
+  function run(action, card) {
     if (SCENES[action]) {
       Badge.show(SCENES[action]);
       return;
     }
     if (action === 'reset') ZooStore.reset();
-    Badge.current?.onCommand?.(action);
+    Badge.current?.onCommand?.(action, card);
   }
 
   async function send(action) {
@@ -1495,7 +1530,7 @@ Badge.registerScene((() => {
     },
     onSkip: () => Commands.send('party'),
     skipLabel: '🎉 Start the party',
-    onCommand: (action) => flow.command(action),
+    onCommand: (action, card) => flow.command(action, card),
     state: () => ({
       inside: insideCards().map((c) => c.canonical_id),
       tally: state.tally,
@@ -2733,7 +2768,7 @@ Badge.registerScene((() => {
       if (w) syncAnimals();
     },
     onSkip: () => Commands.send('party'),
-    onCommand: (action) => flow.command(action),
+    onCommand: (action, card) => flow.command(action, card),
     onTap: (ev) => flow.tap(ev),
     state: () => ({
       pendingVote: flow.pendingVote,

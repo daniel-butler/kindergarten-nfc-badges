@@ -100,6 +100,29 @@ final class ClassroomZooUITests: XCTestCase {
         XCTAssert(app.buttons["Share"].exists, "the log can be shared as a file")
     }
 
+    /// Scanning a trick badge on Check in pauses scanning and offers the vote's buttons right there.
+    func testCheckInDecidesTrick() {
+        let app = launch(mode: "Check in")
+        app.buttons["Start Scanning"].tap()
+        XCTAssert(text(app, "🎭 Trick badge").waitForExistence(timeout: wait))
+        XCTAssert(text(app, expected).exists, "shows \(expected)")
+        app.buttons["👍 Let in"].tap()
+        let gone = NSPredicate(format: "exists == false")
+        expectation(for: gone, evaluatedWith: app.buttons["👍 Let in"])
+        waitForExpectations(timeout: wait)
+    }
+
+    func testCheckInAllowsSpecial() {
+        let app = launch(mode: "Check in")
+        app.buttons["Start Scanning"].tap()
+        XCTAssert(text(app, "⭐ Special badge").waitForExistence(timeout: wait))
+        XCTAssert(app.buttons["Not yet"].exists)
+        app.buttons["⭐ Allow"].tap()
+        let gone = NSPredicate(format: "exists == false")
+        expectation(for: gone, evaluatedWith: app.buttons["⭐ Allow"])
+        waitForExpectations(timeout: wait)
+    }
+
     func testRegisterMarksAway() {
         let app = launch(mode: "Register")
         app.buttons["📛 Scan a badge to register"].tap()

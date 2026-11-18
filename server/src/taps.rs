@@ -23,6 +23,9 @@ pub struct TapEvent {
     /// True when this tap just attached a new alias to `card`.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub linked: bool,
+    /// A trick vote or the special badge now waiting for the presenter because of this tap.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub waiting: Option<crate::presenter::WaitingKind>,
 }
 
 /// What a tap did: the card it resolved to, whether it just linked an alias, and whether

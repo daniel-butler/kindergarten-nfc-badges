@@ -247,7 +247,7 @@ test.describe('trick badge votes', () => {
     await expect(page.locator('.zoo-vote')).toHaveCount(0);
   });
 
-  test('Option+N keeps it out: goose bye-bye, no entry, no mark; tapping again gets the goose again', async ({ page, request }) => {
+  test('Option+N keeps it out: goose bye-bye, no entry, no mark; its next tap gets a new vote', async ({ page, request }) => {
     await openScene(page, 'zoo', 4);
     await phoneTap(request, FOX_TRICK.canonical_id);
     await expect(page.locator('.zoo-vote')).toBeVisible();
@@ -260,10 +260,31 @@ test.describe('trick badge votes', () => {
     await expect(tally(page, 0)).toBeVisible();
     await expect.poll(() => gatekeeper(page), { timeout: 8000 }).toBe('idle');
     expect((await zooState(page)).visitor).toBe(null);
+    await phoneTap(request, FOX_TRICK.canonical_id); // kept out isn't final: the class votes again
+    await expect(page.locator('.zoo-vote')).toBeVisible();
+    expect(await zooState(page)).toMatchObject({ pendingVote: FOX_TRICK.canonical_id, inside: [], tally: 0 });
+    await page.waitForTimeout(1100);
+    await page.keyboard.press('Alt+y');
+    await expect(tally(page, 1)).toBeVisible();
+  });
+
+  test("the phone's Let in for this badge, sent before the vote card shows, counts once it's up", async ({ page, request }) => {
+    await openScene(page, 'zoo', 4);
     await phoneTap(request, FOX_TRICK.canonical_id);
-    await expect.poll(() => gatekeeper(page)).toBe('bye');
+    await request.post('/api/command', { data: { action: 'let-in', card: FOX_TRICK.canonical_id } }); // straight away
+    await expect(tally(page, 1)).toBeVisible({ timeout: 8000 });
     await expect(page.locator('.zoo-vote')).toHaveCount(0);
-    expect(await zooState(page)).toMatchObject({ inside: [], tally: 0 });
+    await expect.poll(() => inside(page), { timeout: 15000 }).toContain(FOX_TRICK.canonical_id);
+  });
+
+  test('a decision named for a different badge is ignored', async ({ page, request }) => {
+    await openScene(page, 'zoo', 4);
+    await phoneTap(request, FOX_TRICK.canonical_id);
+    await expect(page.locator('.zoo-vote')).toBeVisible();
+    await page.waitForTimeout(1100);
+    await request.post('/api/command', { data: { action: 'let-in', card: LION.canonical_id } });
+    await page.waitForTimeout(1000);
+    expect(await zooState(page)).toMatchObject({ pendingVote: FOX_TRICK.canonical_id, tally: 0 });
   });
 
   test('let-in from the phone works too', async ({ page, request }) => {
@@ -374,6 +395,29 @@ test.describe('special badge finale', () => {
     await expect(tally(page, 2)).toBeVisible();
     await expect(page.locator('.zoo3d-finale')).toContainText('Congratulations, Official Zookeepers!', { timeout: 20000 });
     expect(await inside(page)).toContain(STAR_SPECIAL.canonical_id);
+  });
+
+  test('the Zoo List checks off who is in, and shows who is not in yet or not on the list', async ({ page, request }) => {
+    await setCards(request, [PENGUIN, LION, FOX_TRICK, STAR_SPECIAL, OWL_AWAY]);
+    await openScene(page, 'zoo', 5);
+    await phoneTap(request, PENGUIN.canonical_id);
+    await phoneTap(request, FOX_TRICK.canonical_id);
+    await expect(page.locator('.zoo-vote')).toBeVisible({ timeout: 10000 });
+    await page.waitForTimeout(1100);
+    await page.keyboard.press('Alt+n'); // the fox is kept out
+    await expect.poll(() => inside(page), { timeout: 20000 }).toContain(PENGUIN.canonical_id);
+    await expect.poll(() => gatekeeper(page), { timeout: 10000 }).toBe('idle');
+    await page.keyboard.press('Alt+l');
+    const item = (card) => page.locator(`.zoo-list-item[data-id="${card.canonical_id}"]`);
+    await expect(item(PENGUIN)).toHaveAttribute('data-status', 'in', { timeout: 10000 });
+    await expect(item(PENGUIN).locator('.zoo-list-mark')).toHaveText('✅');
+    await expect(item(LION)).toHaveAttribute('data-status', 'waiting');
+    await expect(item(LION).locator('.zoo-list-mark.empty-box')).toBeVisible(); // an empty checkbox
+    await expect(item(FOX_TRICK)).toHaveAttribute('data-status', 'unlisted');
+    await expect(item(STAR_SPECIAL)).toHaveAttribute('data-status', 'unlisted');
+    await expect(item(STAR_SPECIAL).locator('.zoo-list-mark')).toHaveText('❌');
+    await expect(item(OWL_AWAY)).toHaveAttribute('data-status', 'away');
+    await expect(item(OWL_AWAY).locator('.zoo-list-mark')).toHaveText('💤');
   });
 
   test('Option+L shows and hides the Zoo List', async ({ page }) => {

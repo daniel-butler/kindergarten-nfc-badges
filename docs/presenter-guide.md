@@ -84,13 +84,15 @@ card.
   shows is ignored.
   - **Let in:** it walks in with confetti and adds a mark.
   - **Keep out:** the goose honks and waves a wing, and the sticker hops away under a "Bye-bye!"
-    sign.
+    sign. Kept out isn't final: that badge's next tap gets a new vote.
   - Taps that arrive during a vote wait their turn.
 - **⭐ Special badge:**
   - At first it's denied: it peeks at the gate, a big gold padlock pops onto the doors and wobbles,
     and the goose honks and shakes its head.
   - Press **⌥A** (Allow): the goose holds up its clipboard at the gate, then the **Zoo List** pops
-    up with everyone inside, and a pencil scribbles the special badge in. (If an animal is still
+    up, and a pencil scribbles the special badge in. The list shows every badge: ✅ in the zoo,
+    an empty box for not in yet, ❌ not on the list (the special before it's allowed, a trick voted
+    out), and 💤 not here today. (If an animal is still
     walking in, the list waits for it.) **⌥L** shows the list the same way.
   - The special badge's next tap walks it in, adds a mark, and **starts the party**. **⌥S** starts
     the party any time.
@@ -132,6 +134,13 @@ gentle retry. **⌥S** skips. Every present card is asked once before any repeat
 
 The **presenter panel** (**⌥P**) has the zoo buttons, **💤 Everyone's here** (clears every 💤), and
 the last unknown badge's ID.
+
+## Deciding while you scan (Zookeeper → Check in)
+
+When you scan a 🎭 trick or ⭐ special badge on **Check in**, scanning pauses and the screen shows
+that badge with big buttons: **👍 Let in / 👎 Keep out** for a trick, **⭐ Allow / Not yet** for the
+special badge. Tap one and scanning starts again by itself. You can tap as soon as the buttons
+appear: the zoo applies it once the class has seen the vote card.
 
 ## The phone remote (Zookeeper → Presenter)
 

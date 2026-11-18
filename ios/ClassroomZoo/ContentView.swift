@@ -109,6 +109,68 @@ struct ContentView: View {
         }
     }
 
+    /// A trick or special badge was just scanned: decide right here, then scanning carries on.
+    private func decisionCard(_ d: NFCScanner.Decision) -> some View {
+        GroupBox {
+            VStack(spacing: 14) {
+                HStack(spacing: 14) {
+                    Group {
+                        if let path = d.card.image, let url = TapClient.endpoint(server: serverURL, path: path) {
+                            AsyncImage(url: url) { $0.resizable().scaledToFit() } placeholder: { ProgressView() }
+                        } else {
+                            Text(d.card.emoji).font(.system(size: 54))
+                        }
+                    }
+                    .frame(width: 80, height: 80)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(d.kind == "trick" ? "🎭 Trick badge" : "⭐ Special badge").font(.headline)
+                        Text(d.card.label).font(.title.bold())
+                    }
+                    Spacer()
+                }
+                if d.kind == "trick" {
+                    HStack(spacing: 12) {
+                        decisionButton("👍 Let in", tint: .green) { decide(d, "let-in") }
+                        decisionButton("👎 Keep out", tint: .red) { decide(d, "keep-out") }
+                    }
+                } else {
+                    HStack(spacing: 12) {
+                        decisionButton("⭐ Allow", tint: .orange) { decide(d, "allow-special") }
+                        decisionButton("Not yet", tint: .gray) { decide(d, nil) }
+                    }
+                }
+            }
+        }
+    }
+
+    private func decisionButton(_ title: String, tint: Color, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title).font(.title2.bold()).frame(maxWidth: .infinity, minHeight: 64)
+        }
+        .buttonStyle(.borderedProminent)
+        .tint(tint)
+    }
+
+    /// Sends the decision (none for "Not yet"), then scanning starts again.
+    private func decide(_ d: NFCScanner.Decision, _ action: String?) {
+        Task {
+            if let action {
+                switch await TapClient.command(action, card: d.card.canonical_id, server: serverURL) {
+                case .success:
+                    AppLog.log("check in: \(action) for \(d.card.label)")
+                case .failure(let error):
+                    AppLog.log("check in: \(action) for \(d.card.label) failed: \(error.localizedDescription)")
+                    scanner.status = "⚠️ \(error.localizedDescription): try again, or use the Mac keys"
+                    return
+                }
+            } else {
+                AppLog.log("check in: not yet for \(d.card.label)")
+            }
+            scanner.serverURL = serverURL
+            scanner.decided()
+        }
+    }
+
     /// Asks the Mac; logs when the answer changes (or always, for the Reconnect button).
     private func checkLink(logEvenIfSame: Bool = false) async {
         let next: Link
@@ -127,6 +189,9 @@ struct ContentView: View {
 
     private var checkInView: some View {
         VStack(spacing: 24) {
+                if let decision = scanner.decision {
+                    decisionCard(decision)
+                }
                 Button {
                     scanner.serverURL = serverURL
                     if scanner.isScanning { scanner.stop() } else { scanner.start() }

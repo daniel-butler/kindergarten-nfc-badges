@@ -41,7 +41,8 @@ struct Assets;
 enum Broadcast {
     Tap(Box<TapEvent>),
     Cards(Vec<Card>),
-    Command(&'static str),
+    /// A presenter action, and the badge it's for when the phone named one.
+    Command(&'static str, Option<String>),
 }
 
 struct Inner {
@@ -111,7 +112,7 @@ async fn tap(
             presenter,
         } = &mut *inner;
         let outcome = linker.handle(registry, &canonical_id, req.source, Instant::now());
-        presenter.observe(&req.id, outcome.card.as_ref(), now_ms());
+        let waiting = presenter.observe(&req.id, outcome.card.as_ref(), now_ms());
         let event = TapEvent {
             raw_id: req.id,
             canonical_id,
@@ -119,6 +120,7 @@ async fn tap(
             card: outcome.card,
             ts: now_ms(),
             linked: outcome.linked,
+            waiting,
         };
         (
             event,
@@ -146,9 +148,13 @@ fn to_event(boot: u64, id: u64, msg: Broadcast) -> Option<Event> {
     let event = match msg {
         Broadcast::Tap(t) => Event::default().event("tap").json_data(t),
         Broadcast::Cards(c) => Event::default().event("cards").json_data(c),
-        Broadcast::Command(action) => Event::default()
-            .event("command")
-            .json_data(serde_json::json!({ "action": action })),
+        Broadcast::Command(action, card) => {
+            let mut data = serde_json::json!({ "action": action });
+            if let Some(card) = card {
+                data["card"] = card.into();
+            }
+            Event::default().event("command").json_data(data)
+        }
     };
     event.ok().map(|e| e.id(history::event_id(boot, id)))
 }
@@ -348,6 +354,8 @@ async fn get_presenter(State(state): State<AppState>) -> Json<PresenterState> {
 #[derive(Deserialize)]
 struct CommandRequest {
     action: String,
+    /// The badge a let-in / keep-out is for (the phone's Check in buttons send it).
+    card: Option<String>,
 }
 
 /// A key press or a phone button: apply the server's part, then tell the page.
@@ -375,17 +383,24 @@ async fn command(
                 Some(inner.registry.cards().to_vec())
             }
             "let-in" | "keep-out" => {
-                inner.presenter.clear_trick();
+                inner.presenter.decide_trick(action == "let-in");
                 None
             }
             _ => None,
         }
     };
-    journal::write("server", &format!("command {action}"));
+    let card = req.card.as_deref().and_then(ids::normalize);
+    journal::write(
+        "server",
+        &format!(
+            "command {action}{}",
+            card.as_ref().map_or(String::new(), |c| format!(" for {c}"))
+        ),
+    );
     if let Some(cards) = cards {
         state.send(Broadcast::Cards(cards));
     }
-    state.send(Broadcast::Command(action));
+    state.send(Broadcast::Command(action, card));
     Ok(Json(serde_json::json!({ "ok": true })))
 }
 

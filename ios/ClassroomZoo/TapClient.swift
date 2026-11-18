@@ -86,13 +86,25 @@ enum TapClient {
     }
 
     struct TapResponse: Decodable {
-        struct Card: Decodable {
-            let emoji: String
-            let label: String
-        }
-
         let canonical_id: String
-        let card: Card?
+        let card: CardDTO?
+        /// "trick" or "special" when this tap left a decision waiting for the presenter.
+        let waiting: String?
+    }
+
+    /// What the server made of a tap: a one-line summary, the card, and any decision waiting.
+    struct TapReply {
+        let summary: String
+        let card: CardDTO?
+        let waiting: String?
+    }
+
+    static func reply(of data: Data) -> TapReply {
+        guard let response = try? JSONDecoder().decode(TapResponse.self, from: data) else {
+            return TapReply(summary: String(data: data, encoding: .utf8) ?? "Unreadable response", card: nil, waiting: nil)
+        }
+        let summary = response.card.map { "\($0.emoji) \($0.label)" } ?? "❓ Unknown badge \(response.canonical_id)"
+        return TapReply(summary: summary, card: response.card, waiting: response.waiting)
     }
 
     /// Same names and hex values as the swatches on the projector page.
@@ -153,14 +165,10 @@ enum TapClient {
 
     /// Short human summary of a tap response: "🐧 Penguin" or "❓ Unknown badge …".
     static func summary(of data: Data) -> String {
-        guard let response = try? JSONDecoder().decode(TapResponse.self, from: data) else {
-            return String(data: data, encoding: .utf8) ?? "Unreadable response"
-        }
-        if let card = response.card { return "\(card.emoji) \(card.label)" }
-        return "❓ Unknown badge \(response.canonical_id)"
+        reply(of: data).summary
     }
 
-    static func post(id: String, server: String) async -> Result<String, Error> {
+    static func post(id: String, server: String) async -> Result<TapReply, Error> {
         guard let url = endpoint(server: server, path: "/tap") else { return .failure(Failure.badURL(server)) }
         var request = URLRequest(url: url, timeoutInterval: 4)
         request.httpMethod = "POST"
@@ -172,7 +180,7 @@ enum TapClient {
             guard status == 200 else {
                 return .failure(Failure.server(status, String(data: data, encoding: .utf8) ?? ""))
             }
-            return .success(summary(of: data))
+            return .success(reply(of: data))
         } catch {
             return .failure(error)
         }
@@ -242,13 +250,16 @@ enum TapClient {
         ("⌥M", "Mute"), ("⌥T", "Typing test mode"),
     ]
 
-    /// Run a presenter command on the projector page (same as its keyboard shortcut).
-    static func command(_ action: String, server: String) async -> Result<Void, Error> {
+    /// Run a presenter command on the projector page (same as its keyboard shortcut). `card` names
+    /// the badge a let-in / keep-out is for, so it counts once that badge's vote is on screen.
+    static func command(_ action: String, card: String? = nil, server: String) async -> Result<Void, Error> {
         guard let url = endpoint(server: server, path: "/api/command") else { return .failure(Failure.badURL(server)) }
         var request = URLRequest(url: url, timeoutInterval: 4)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.httpBody = try? JSONSerialization.data(withJSONObject: ["action": action])
+        var body = ["action": action]
+        if let card { body["card"] = card }
+        request.httpBody = try? JSONSerialization.data(withJSONObject: body)
         return await send(request).map { _ in () }
     }
 

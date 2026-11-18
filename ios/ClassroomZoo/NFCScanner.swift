@@ -18,6 +18,14 @@ final class NFCScanner: NSObject, ObservableObject {
     @Published var lastID: String?
     @Published var lastResponse: String?
     @Published var sentCount = 0
+    /// A trick or special badge just scanned that the presenter decides about on this screen.
+    @Published var decision: Decision?
+
+    struct Decision: Equatable {
+        /// "trick" or "special".
+        let kind: String
+        let card: CardDTO
+    }
 
     var serverURL = ""
 
@@ -25,6 +33,8 @@ final class NFCScanner: NSObject, ObservableObject {
     /// Set while registering: the session reads one badge, hands its UID here, and ends.
     private var onceHandler: ((String) -> Void)?
     private var lastSent: (id: String, at: Date)?
+    /// Scanning stopped so the decision buttons can be tapped (the NFC sheet covers them).
+    private var pausedForDecision = false
     private let haptics = UINotificationFeedbackGenerator()
     #if DEBUG
     /// UI tests run in the simulator, which has no NFC: ZOO_FAKE_TAGS="ID1,ID2" stands in for
@@ -96,10 +106,14 @@ final class NFCScanner: NSObject, ObservableObject {
         let server = serverURL
         Task {
             switch await TapClient.post(id: id, server: server) {
-            case .success(let summary):
-                lastResponse = summary
-                AppLog.log("tap \(id) sent: \(summary)")
-                alert("\(summary)\nNext badge…")
+            case .success(let reply):
+                lastResponse = reply.summary
+                AppLog.log("tap \(id) sent: \(reply.summary)\(reply.waiting.map { " (\($0) waiting)" } ?? "")")
+                if let kind = reply.waiting, let card = reply.card {
+                    pause(for: Decision(kind: kind, card: card))
+                } else {
+                    alert("\(reply.summary)\nNext badge…")
+                }
             case .failure(let error):
                 lastResponse = "⚠️ \(error.localizedDescription)"
                 AppLog.log("tap \(id) not sent: \(error.localizedDescription)")
@@ -108,6 +122,22 @@ final class NFCScanner: NSObject, ObservableObject {
             }
         }
         return true
+    }
+
+    /// Stops scanning so the presenter can decide on this screen; `decided()` picks it up again.
+    private func pause(for decision: Decision) {
+        self.decision = decision
+        AppLog.log("waiting for the presenter: \(decision.kind) \(decision.card.label)")
+        guard let session else { return }
+        pausedForDecision = true
+        session.alertMessage = decision.kind == "trick" ? "🎭 Trick badge! Decide on the phone." : "⭐ Special badge! Decide on the phone."
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { session.invalidate() }
+    }
+
+    /// The presenter decided: scanning starts again.
+    func decided() {
+        decision = nil
+        start()
     }
 
     #if DEBUG
@@ -147,6 +177,11 @@ final class NFCScanner: NSObject, ObservableObject {
         isScanning = false
         session = nil
         AppLog.log("NFC session ended: \(error.localizedDescription)")
+        if pausedForDecision {
+            pausedForDecision = false
+            status = "Decide below 👇"
+            return
+        }
         switch (error as? NFCReaderError)?.code {
         case .readerSessionInvalidationErrorUserCanceled:
             status = "Stopped. Tap Start Scanning."
