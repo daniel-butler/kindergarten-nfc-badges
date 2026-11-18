@@ -795,15 +795,55 @@ function shuffle(list) {
   return a;
 }
 
+/** Check-ins shared by the 3D Zoo and the backup 2D Zoo Gate; survives a page reload. */
+const ZooStore = (() => {
+  const KEY = 'zoo-gate-v1';
+  const fresh = () => ({ checkedIn: [], open: false });
+  return {
+    load() {
+      try {
+        const s = JSON.parse(localStorage.getItem(KEY));
+        if (s && Array.isArray(s.checkedIn)) return { checkedIn: s.checkedIn, open: !!s.open };
+      } catch {
+        /* private window or corrupt value: start fresh */
+      }
+      return fresh();
+    },
+    save(state) {
+      try {
+        localStorage.setItem(KEY, JSON.stringify(state));
+      } catch {
+        /* not fatal: check-ins just won't survive a reload */
+      }
+    },
+    reset() {
+      const state = fresh();
+      this.save(state);
+      return state;
+    },
+  };
+})();
+
+/** Only real (non-trick) badges of kids who are here count toward the party. */
+function zooCounts(cards, checkedIn) {
+  const real = cards.filter((c) => !c.trick && !c.away);
+  const inside = new Set(checkedIn);
+  return { done: real.filter((c) => inside.has(c.canonical_id)).length, total: real.length };
+}
+
+function zooCounterText(cards, checkedIn) {
+  const { done, total } = zooCounts(cards, checkedIn);
+  return total ? el('span', {}, el('b', {}, done), ` of ${total} animals are home`) : 'No animals registered yet';
+}
+
 Badge.registerScene((() => {
-  const STORE_KEY = 'zoo-gate-v1';
   const WALK_MS = 2600;
   const AUTO_OPEN_DELAY_MS = 2200;
   const PARADE_STAGGER_MS = 350;
   const PARADE_CROSS_MS = 4500;
 
   let root;
-  let state = load();
+  let state = ZooStore.load();
   let els = {};
   let slots = [];
   let walking = 0;
@@ -811,40 +851,18 @@ Badge.registerScene((() => {
   let deniedTimer;
   let hintTimer;
 
-  function load() {
-    try {
-      const s = JSON.parse(localStorage.getItem(STORE_KEY));
-      if (s && Array.isArray(s.checkedIn)) return { checkedIn: s.checkedIn, open: !!s.open };
-    } catch {
-      /* private window or corrupt value: start fresh */
-    }
-    return { checkedIn: [], open: false };
-  }
-
-  function save() {
-    try {
-      localStorage.setItem(STORE_KEY, JSON.stringify(state));
-    } catch {
-      /* not fatal: check-ins just won't survive a reload */
-    }
-  }
-
   const cardById = (id) => Badge.cards.find((c) => c.canonical_id === id);
   // Stored ids may include cards not loaded yet (or deleted); only display the ones we know.
-  const insideCards = () => state.checkedIn.map(cardById).filter(Boolean);
+  const insideCards = () => state.checkedIn.map(cardById).filter((c) => c && !c.away);
+  const present = () => Badge.cards.filter((c) => !c.away);
+  const save = () => ZooStore.save(state);
   const colors = () => Badge.cards.map((c) => c.color.hex);
 
-  function counts() {
-    const real = Badge.cards.filter((c) => !c.trick);
-    const inside = new Set(state.checkedIn);
-    return { done: real.filter((c) => inside.has(c.canonical_id)).length, total: real.length };
-  }
+  const counts = () => zooCounts(Badge.cards, state.checkedIn);
 
   function updateCounter() {
     const { done, total } = counts();
-    els.counter.replaceChildren(total
-      ? el('span', {}, el('b', {}, done), ` of ${total} zookeepers checked in`)
-      : 'No zookeepers registered yet');
+    els.counter.replaceChildren(zooCounterText(Badge.cards, state.checkedIn));
     els.progress.style.width = `${total ? (100 * done) / total : 0}%`;
   }
 
@@ -872,9 +890,9 @@ Badge.registerScene((() => {
   function renderGate() {
     generation++;
     walking = 0;
-    root.className = 'scene scene-zoo';
+    root.className = 'scene scene-zoo scene-gate';
     const inside = insideCards();
-    slots = Badge.cards.map((_, i) => (inside[i] ? filledSlot(inside[i]) : el('div', { class: 'zoo-slot empty' })));
+    slots = present().map((_, i) => (inside[i] ? filledSlot(inside[i]) : el('div', { class: 'zoo-slot empty' })));
     els = {
       counter: el('div', { class: 'zoo-counter' }),
       progress: el('div', { class: 'zoo-progress-fill' }),
@@ -983,7 +1001,7 @@ Badge.registerScene((() => {
     const lane = el('div', { class: 'parade' });
     root.append(lane);
     const vmin = Math.min(innerWidth, innerHeight) / 100;
-    const cards = Badge.cards;
+    const cards = present();
     cards.forEach((card, i) => {
       const marcher = el('div', { class: 'marcher' }, el('div', { class: 'bob-hop' }, ring(card, 16)));
       lane.append(marcher);
@@ -997,11 +1015,11 @@ Badge.registerScene((() => {
   }
 
   function showFinale(celebrate) {
-    root.className = 'scene scene-zoo finale';
+    root.className = 'scene scene-zoo scene-gate finale';
     root.replaceChildren(el('div', { class: 'zoo-finale' },
       el('div', { class: 'huge-emoji-sm pop' }, '🏆'),
       el('div', { class: 'title finale-title pop' }, 'Congratulations, Official Zookeepers!'),
-      el('div', { class: 'finale-animals' }, Badge.cards.map((c) => ring(c, 10)))));
+      el('div', { class: 'finale-animals' }, present().map((c) => ring(c, 10)))));
     if (celebrate) {
       Sound.fanfare();
       Confetti.rain(colors(), { count: 450 });
@@ -1014,9 +1032,8 @@ Badge.registerScene((() => {
   }
 
   function reset() {
-    state = { checkedIn: [], open: false };
-    save();
-    Badge.show('zoo');
+    state = ZooStore.reset();
+    Badge.show('gate');
   }
 
   function bounce(node) {
@@ -1027,13 +1044,13 @@ Badge.registerScene((() => {
   }
 
   return {
-    id: 'zoo',
-    name: '🦁 Zoo Gate',
-    key: '3',
+    id: 'gate',
+    name: '🏰 Zoo Gate (2D backup)',
+    key: '6',
     kid: true,
     onEnter(r) {
       root = r;
-      state = load();
+      state = ZooStore.load();
       render();
       addEventListener('resize', layoutSlots);
       const { done, total } = counts();
@@ -1266,6 +1283,630 @@ Badge.registerScene((() => {
         el('div', { class: 'big-label' }, ev.card ? `That's the ${ev.card.label}` : 'Not a zoo badge!'));
       timer = Badge.later(ask, NOPE_MS);
     },
+  };
+})());
+
+// ===================================================================
+// Scene: Zoo (3D playground)
+// ===================================================================
+
+/** A texture of the card's sticker photo, or of its emoji when there is no photo. */
+const cardTexture = (() => {
+  const cache = new Map();
+  function emojiCanvas(emoji) {
+    const c = document.createElement('canvas');
+    c.width = c.height = 256;
+    const g = c.getContext('2d');
+    g.font = '200px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif';
+    g.textAlign = 'center';
+    g.textBaseline = 'middle';
+    g.fillText(emoji, 128, 140);
+    return c;
+  }
+  return function cardTexture(card) {
+    const key = card.image || `emoji:${card.emoji}`;
+    if (cache.has(key)) return cache.get(key);
+    let tex;
+    if (card.image) {
+      tex = new THREE.TextureLoader().load(card.image);
+      tex.aspect = 1;
+      tex.ready = new Promise((resolve) => {
+        const img = new Image();
+        img.onload = () => {
+          tex.aspect = img.naturalWidth / img.naturalHeight || 1;
+          resolve();
+        };
+        img.onerror = resolve;
+        img.src = card.image;
+      });
+    } else {
+      tex = new THREE.CanvasTexture(emojiCanvas(card.emoji));
+      tex.aspect = 1;
+      tex.ready = Promise.resolve();
+    }
+    cache.set(key, tex);
+    return tex;
+  };
+})();
+
+Badge.registerScene((() => {
+  const ANIMAL_H = 3.2;
+  const GATE_Z = 22;
+  const OUTSIDE_Z = 27;
+  const PLAY_EDGE_Z = 9;
+  const REASSIGN_MS = 12000;
+  const PARTY_DELAY_MS = 1500;
+  const OVERVIEW = { pos: [0, 19, 29], look: [0, 0, 1.5] };
+  const PARTY_VIEW = { pos: [0, 11, 21], look: [0, 1.5, 0] };
+  const AT_GATE = { pos: [0, 5, 35], look: [0, 2.2, 20] };
+
+  let root;
+  let state;
+  let w = null; // three.js world while the scene is open
+  let animals = new Map(); // canonical_id -> { card, sprite, shadow, arrived, station, slot, phase, bounceAt }
+  let queue = [];
+  let busy = false;
+  let finale = false;
+  let generation = 0;
+  let deniedTimer;
+  let hud;
+
+  const V = (x, y, z) => new THREE.Vector3(x, y, z);
+  const cardById = (id) => Badge.cards.find((c) => c.canonical_id === id);
+  const counts = () => zooCounts(Badge.cards, state.checkedIn);
+  const shouldParty = () => {
+    const { done, total } = counts();
+    return total > 0 && done === total;
+  };
+
+  // ---------- tiny tween system driven by the render loop ----------
+  const tasks = new Set();
+  const tween = (ms, fn) => new Promise((done) => tasks.add({ t0: performance.now(), ms, fn, done }));
+  const wait = (ms) => tween(ms, () => {});
+
+  // ---------- world ----------
+  const lam = (c) => new THREE.MeshLambertMaterial({ color: c });
+  const box = (wd, h, d, c) => new THREE.Mesh(new THREE.BoxGeometry(wd, h, d), lam(c));
+  const flat = (geo, c, y) => {
+    const m = new THREE.Mesh(geo, lam(c));
+    m.rotation.x = -Math.PI / 2;
+    m.position.y = y;
+    return m;
+  };
+
+  function textTexture(text, { size = 84, bg = '#fffaf0', fg = '#1d2251', border = '#8a5a3b', wd = 512, h = 128 } = {}) {
+    const c = document.createElement('canvas');
+    c.width = wd;
+    c.height = h;
+    const g = c.getContext('2d');
+    g.fillStyle = bg;
+    g.strokeStyle = border;
+    g.lineWidth = 12;
+    g.beginPath();
+    if (g.roundRect) g.roundRect(6, 6, wd - 12, h - 12, 28);
+    else g.rect(6, 6, wd - 12, h - 12);
+    g.fill();
+    g.stroke();
+    g.fillStyle = fg;
+    g.font = `bold ${size}px "Chalkboard SE", ui-rounded, sans-serif`;
+    g.textAlign = 'center';
+    g.textBaseline = 'middle';
+    g.fillText(text, wd / 2, h / 2 + 4);
+    return new THREE.CanvasTexture(c);
+  }
+
+  const shadowTexture = (() => {
+    let tex;
+    return () => {
+      if (tex) return tex;
+      const c = document.createElement('canvas');
+      c.width = c.height = 64;
+      const g = c.getContext('2d');
+      const r = g.createRadialGradient(32, 32, 2, 32, 32, 30);
+      r.addColorStop(0, 'rgba(0,0,0,0.35)');
+      r.addColorStop(1, 'rgba(0,0,0,0)');
+      g.fillStyle = r;
+      g.fillRect(0, 0, 64, 64);
+      tex = new THREE.CanvasTexture(c);
+      return tex;
+    };
+  })();
+
+  function blob(size) {
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(size, size),
+      new THREE.MeshBasicMaterial({ map: shadowTexture(), transparent: true, depthWrite: false }));
+    m.rotation.x = -Math.PI / 2;
+    m.position.y = 0.03;
+    return m;
+  }
+
+  function spriteOf(tex, h = ANIMAL_H) {
+    const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false }));
+    const fit = () => s.scale.set(h * (tex.aspect || 1), h, 1);
+    fit();
+    tex.ready?.then(fit);
+    return s;
+  }
+
+  const emojiSprite = (emoji, h) => spriteOf(cardTexture({ emoji }), h);
+
+  function buildGate(scene) {
+    const gate = new THREE.Group();
+    gate.position.z = GATE_Z;
+    const postL = box(0.9, 5.5, 0.9, '#8a5a3b');
+    postL.position.set(-2.4, 2.75, 0);
+    const postR = postL.clone();
+    postR.position.x = 2.4;
+    const wood = lam('#8a5a3b');
+    const sign = new THREE.Mesh(new THREE.BoxGeometry(6.6, 1.6, 0.5), [wood, wood, wood, wood,
+      new THREE.MeshBasicMaterial({ map: textTexture('🦒 ZOO 🐘', { bg: '#8a5a3b', fg: '#fff3c4', border: '#5d3a22' }) }), wood]);
+    sign.position.y = 5.8;
+    gate.add(postL, postR, sign);
+    const doors = [-1, 1].map((side) => {
+      const pivot = new THREE.Group();
+      pivot.position.set(side * 1.95, 0, 0);
+      for (let i = 0; i < 6; i++) {
+        const bar = box(0.12, 3.6, 0.12, '#b8b8b8');
+        bar.position.set(-side * (0.2 + i * 0.33), 1.9, 0);
+        pivot.add(bar);
+      }
+      for (const y of [0.4, 3.5]) {
+        const rail = box(1.95, 0.2, 0.14, '#9a9a9a');
+        rail.position.set(-side * 0.98, y, 0);
+        pivot.add(rail);
+      }
+      gate.add(pivot);
+      return pivot;
+    });
+    scene.add(gate);
+    for (const side of [-1, 1]) {
+      for (let i = 0; i < 12; i++) {
+        const p = box(0.25, 1.4, 0.25, '#8a5a3b');
+        p.position.set(side * (3.5 + i * 1.6), 0.7, GATE_Z);
+        scene.add(p);
+      }
+      const rail = box(18, 0.18, 0.12, '#8a5a3b');
+      rail.position.set(side * 12.3, 1.1, GATE_Z);
+      scene.add(rail);
+    }
+    return doors;
+  }
+
+  // Each station places an animal for a slot at time t (seconds).
+  function buildPlayground(scene) {
+    const stations = [];
+    const add = (obj, x, y, z) => {
+      obj.position.set(x, y, z);
+      scene.add(obj);
+      return obj;
+    };
+
+    // Slide: ladder at the back, slide down toward the front.
+    const SL = { x: -7, z: -3 };
+    add(box(0.2, 4, 0.2, '#e8590c'), SL.x - 0.8, 2, SL.z - 1.5);
+    add(box(0.2, 4, 0.2, '#e8590c'), SL.x + 0.8, 2, SL.z - 1.5);
+    add(box(2, 0.25, 1.6, '#e8590c'), SL.x, 4, SL.z - 1.2);
+    const slide = add(box(1.6, 0.2, 6.2, '#ffd43b'), SL.x, 2.1, SL.z + 1.6);
+    slide.rotation.x = 0.63;
+    stations.push({
+      name: 'slide', slots: 3, period: 5,
+      pos(slot, t) {
+        const p = (t / this.period + slot / this.slots) % 1;
+        if (p < 0.4) return V(SL.x, (p / 0.4) * 4, SL.z - 1.6);
+        if (p < 0.65) {
+          const k = (p - 0.4) / 0.25;
+          return V(SL.x, 4 - k * 4, SL.z - 1.2 + k * 5.6);
+        }
+        const k = (p - 0.65) / 0.35;
+        return V(SL.x + 1.6 * Math.sin(k * Math.PI), 0, SL.z + 4.4 - k * 6);
+      },
+    });
+
+    // Swings: a frame with three seats swinging toward the camera.
+    const SW = { x: 7, z: -4 };
+    for (const dx of [-3.2, 3.2]) {
+      const leg = add(box(0.25, 5, 0.25, '#1c7ed6'), SW.x + dx, 2.5, SW.z);
+      leg.rotation.z = dx > 0 ? -0.12 : 0.12;
+    }
+    add(box(6.8, 0.3, 0.3, '#1c7ed6'), SW.x, 5, SW.z);
+    const seats = [-2, 0, 2].map((dx) => {
+      const pivot = add(new THREE.Group(), SW.x + dx, 5, SW.z);
+      const rope = box(0.06, 3.6, 0.06, '#495057');
+      rope.position.y = -1.8;
+      const seat = box(1, 0.15, 0.6, '#c92a2a');
+      seat.position.y = -3.7;
+      pivot.add(rope, seat);
+      return pivot;
+    });
+    stations.push({
+      name: 'swings', slots: 3, period: 2.6,
+      pos(slot, t) {
+        const a = Math.sin((t / this.period) * Math.PI * 2 + slot * 1.3) * 0.7;
+        seats[slot].rotation.x = a;
+        return V(SW.x + (slot - 1) * 2, 5 - Math.cos(a) * 3.7 + 0.05, SW.z + Math.sin(a) * 3.7);
+      },
+    });
+
+    // Seesaw: a plank tipping on a pivot.
+    const SS = { x: 7, z: 5 };
+    add(box(0.8, 0.9, 0.8, '#5f3dc4'), SS.x, 0.45, SS.z);
+    const plank = add(box(7, 0.25, 0.9, '#9775fa'), SS.x, 1, SS.z);
+    stations.push({
+      name: 'seesaw', slots: 2, period: 2.2,
+      pos(slot, t) {
+        const a = Math.sin((t / this.period) * Math.PI * 2) * 0.32;
+        plank.rotation.z = a;
+        const side = slot ? 1 : -1;
+        return V(SS.x + side * 3 * Math.cos(a), 1.15 + side * 3 * Math.sin(a), SS.z);
+      },
+    });
+
+    // Merry-go-round: a spinning disk with riders.
+    const MG = { x: -7, z: 5 };
+    const disk = add(new THREE.Mesh(new THREE.CylinderGeometry(2.8, 2.8, 0.35, 24),
+      [lam('#37b24d'), lam('#ffd43b'), lam('#37b24d')]), MG.x, 0.4, MG.z);
+    add(box(0.25, 2, 0.25, '#868e96'), MG.x, 1.2, MG.z);
+    stations.push({
+      name: 'merry', slots: 4, period: 6,
+      pos(slot, t) {
+        const a = (t / this.period) * Math.PI * 2 + (slot / this.slots) * Math.PI * 2;
+        disk.rotation.y = (t / this.period) * Math.PI * 2;
+        return V(MG.x + Math.cos(a) * 1.9, 0.6, MG.z + Math.sin(a) * 1.9);
+      },
+    });
+
+    // Open grass: everyone else hops around the middle.
+    stations.push({
+      name: 'grass', slots: Infinity, period: 4,
+      pos(slot, t) {
+        const a = slot * 2.399 + t * 0.15;
+        const r = 2.2 + (slot % 4) * 0.9;
+        return V(Math.cos(a) * r, Math.abs(Math.sin(t * 3 + slot)) * 0.5, Math.sin(a) * r * 0.8 + 1);
+      },
+    });
+    return stations;
+  }
+
+  function buildWorld(container) {
+    let renderer;
+    try {
+      renderer = new THREE.WebGLRenderer({ antialias: true });
+    } catch {
+      return null;
+    }
+    renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+    container.append(renderer.domElement);
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color('#8fd8ff');
+    scene.fog = new THREE.Fog('#8fd8ff', 55, 110);
+    const camera = new THREE.PerspectiveCamera(50, 16 / 9, 0.1, 300);
+    camera.position.set(...OVERVIEW.pos);
+    scene.add(new THREE.HemisphereLight('#ffffff', '#5aa83c', 0.95));
+    const sun = new THREE.DirectionalLight('#fff4d6', 0.55);
+    sun.position.set(15, 30, 10);
+    scene.add(sun);
+
+    scene.add(flat(new THREE.PlaneGeometry(300, 300), '#6cc24a', 0));
+    scene.add(flat(new THREE.CircleGeometry(12, 48), '#f2d49b', 0.01));
+    const path = flat(new THREE.PlaneGeometry(3, OUTSIDE_Z + 4 - 10), '#f2d49b', 0.012);
+    path.position.z = (OUTSIDE_Z + 4 + 10) / 2;
+    scene.add(path);
+    for (let i = 0; i < 44; i++) {
+      const a = (i / 44) * Math.PI * 2;
+      if (Math.abs(Math.sin(a / 2)) < 0.14) continue;
+      const r = 20 + (i % 5) * 2.4;
+      const trunk = box(0.5, 1.6, 0.5, '#7a4b2a');
+      trunk.position.set(Math.sin(a) * r, 0.8, Math.cos(a) * r);
+      const top = new THREE.Mesh(new THREE.ConeGeometry(1.6 + (i % 3) * 0.3, 3.4, 7), lam(i % 3 ? '#3f9a3a' : '#2f7d33'));
+      top.position.set(trunk.position.x, 3.1, trunk.position.z);
+      scene.add(trunk, top);
+    }
+    const doors = buildGate(scene);
+    const stations = buildPlayground(scene);
+    const look = V(...OVERVIEW.look);
+    return {
+      renderer, scene, camera, doors, stations, look,
+      cam: { pos: V(...OVERVIEW.pos), look: V(...OVERVIEW.look), follow: null },
+      reassignAt: performance.now() + REASSIGN_MS,
+      raf: 0,
+    };
+  }
+
+  // ---------- animals ----------
+  function addAnimal(card, arrived) {
+    const sprite = spriteOf(cardTexture(card));
+    const shadow = blob(2);
+    w.scene.add(sprite, shadow);
+    const a = { card, sprite, shadow, arrived, station: null, slot: 0, bounceAt: 0, imageKey: card.image || '' };
+    animals.set(card.canonical_id, a);
+    return a;
+  }
+
+  function removeAnimal(id) {
+    const a = animals.get(id);
+    if (!a) return;
+    w.scene.remove(a.sprite, a.shadow);
+    animals.delete(id);
+  }
+
+  function assignStations() {
+    const playing = [...animals.values()].filter((a) => a.arrived);
+    const order = shuffle(playing);
+    const free = w.stations.filter((s) => s.name !== 'grass').flatMap((s) => Array.from({ length: s.slots }, (_, i) => [s, i]));
+    const spots = shuffle(free);
+    const grass = w.stations.find((s) => s.name === 'grass');
+    order.forEach((a, i) => {
+      const [station, slot] = spots[i] || [grass, i];
+      a.station = station;
+      a.slot = slot;
+    });
+  }
+
+  function syncAnimals() {
+    const want = state.checkedIn.map(cardById).filter((c) => c && !c.away);
+    const ids = new Set(want.map((c) => c.canonical_id));
+    for (const id of [...animals.keys()]) if (!ids.has(id)) removeAnimal(id);
+    for (const card of want) {
+      const a = animals.get(card.canonical_id);
+      if (!a) addAnimal(card, true);
+      else if ((card.image || '') !== a.imageKey) {
+        removeAnimal(card.canonical_id);
+        Object.assign(addAnimal(card, a.arrived), { station: a.station, slot: a.slot });
+      } else a.card = card;
+    }
+    assignStations();
+  }
+
+  function hearts(at) {
+    for (let i = 0; i < 6; i++) {
+      const h = emojiSprite('❤️', 0.9);
+      h.position.copy(at).add(V((Math.random() - 0.5) * 2, 1.5, (Math.random() - 0.5) * 2));
+      w.scene.add(h);
+      const y0 = h.position.y;
+      tween(1300 + i * 100, (t) => {
+        h.position.y = y0 + t * 3;
+        h.material.opacity = 1 - t;
+      }).then(() => w?.scene.remove(h));
+    }
+  }
+
+  function screenPoint(v) {
+    const p = v.clone().project(w.camera);
+    return { x: (p.x + 1) / 2, y: (1 - p.y) / 2 };
+  }
+
+  // ---------- arrivals ----------
+  async function arrive(card) {
+    const gen = generation;
+    const fast = queue.length > 0;
+    const a = addAnimal(card, false);
+    a.sprite.position.set(0, ANIMAL_H / 2, OUTSIDE_Z);
+    w.cam.follow = null;
+    setCam(AT_GATE);
+    await wait(fast ? 250 : 900);
+    if (gen !== generation) return;
+
+    const bubble = new THREE.Sprite(new THREE.SpriteMaterial({ map: textTexture(`Welcome, ${card.label}!`, { size: 64 }), transparent: true }));
+    bubble.scale.set(6, 1.5, 1);
+    bubble.position.set(0, ANIMAL_H + 1.2, OUTSIDE_Z);
+    w.scene.add(bubble);
+    Sound.chime();
+    Confetti.burst([card.color.hex], { ...screenPoint(V(0, 5.5, GATE_Z)), count: 200 });
+    await tween(500, (t) => {
+      const e = 1 - (1 - t) ** 3;
+      w.doors[0].rotation.y = -e * 1.9;
+      w.doors[1].rotation.y = e * 1.9;
+    });
+    if (gen !== generation) return;
+    w.scene.remove(bubble);
+
+    w.cam.follow = fast ? null : a;
+    const from = a.sprite.position.clone();
+    const to = V(0, 0, PLAY_EDGE_Z);
+    const dist = from.distanceTo(to);
+    await tween(fast ? 1300 : 2600, (t) => {
+      a.sprite.position.lerpVectors(from, to, t);
+      a.sprite.position.y = ANIMAL_H / 2 + Math.abs(Math.sin(t * dist * 0.9)) * 0.8;
+    });
+    if (gen !== generation) return;
+    tween(600, (t) => {
+      const e = 1 - (1 - t) ** 3;
+      w.doors[0].rotation.y = -(1 - e) * 1.9;
+      w.doors[1].rotation.y = (1 - e) * 1.9;
+    });
+
+    // Friends cheer.
+    const now = performance.now();
+    for (const f of animals.values()) if (f.arrived) f.bounceAt = now;
+    hearts(V(0, 0, 4));
+    Sound.tick(6);
+    a.arrived = true;
+    assignStations();
+    if (!fast) {
+      await wait(1500);
+      if (gen !== generation) return;
+    }
+    w.cam.follow = null;
+    if (!queue.length) setCam(OVERVIEW);
+  }
+
+  async function drain() {
+    if (busy) return;
+    busy = true;
+    while (queue.length && w) {
+      const card = queue.shift();
+      await arrive(card);
+    }
+    busy = false;
+    if (w && !finale && shouldParty()) Badge.later(startParty, PARTY_DELAY_MS);
+  }
+
+  function setCam(view) {
+    w.cam.pos.set(...view.pos);
+    w.cam.look.set(...view.look);
+  }
+
+  // ---------- party ----------
+  function startParty() {
+    if (finale || !w) return;
+    finale = true;
+    state.open = true;
+    ZooStore.save(state);
+    showFinale(true);
+  }
+
+  function showFinale(celebrate) {
+    root.querySelector('.zoo3d-finale')?.remove();
+    root.append(el('div', { class: 'zoo3d-finale' },
+      el('div', { class: 'huge-emoji-sm pop' }, '🏆'),
+      el('div', { class: 'title finale-title pop' }, 'Congratulations, Official Zookeepers!')));
+    if (w) setCam(PARTY_VIEW);
+    if (celebrate) {
+      Sound.fanfare();
+      Confetti.rain(Badge.cards.map((c) => c.color.hex), { count: 450 });
+    }
+  }
+
+  function denied() {
+    Sound.buzzer();
+    Badge.cancel(deniedTimer);
+    root.querySelector('.zoo-denied')?.remove();
+    root.append(el('div', { class: 'zoo-denied' },
+      el('div', { class: 'huge-emoji wobble' }, '🙅'),
+      el('div', { class: 'title shake' }, 'ACCESS DENIED'),
+      el('div', { class: 'subtitle' }, 'That badge is not a zoo badge!')));
+    deniedTimer = Badge.later(() => root.querySelector('.zoo-denied')?.remove(), 2500);
+  }
+
+  // ---------- render loop ----------
+  function frame(now) {
+    if (!w) return;
+    w.raf = requestAnimationFrame(frame);
+    for (const t of tasks) {
+      const p = Math.min(1, (now - t.t0) / t.ms);
+      t.fn(p);
+      if (p >= 1) {
+        tasks.delete(t);
+        t.done();
+      }
+    }
+    if (now > w.reassignAt) {
+      assignStations();
+      w.reassignAt = now + REASSIGN_MS;
+    }
+    const secs = now / 1000;
+    const all = [...animals.values()];
+    all.forEach((a, i) => {
+      if (a.arrived) {
+        let target;
+        if (finale) {
+          const ang = (i / all.length) * Math.PI * 2 + secs * 0.4;
+          target = V(Math.cos(ang) * 6, Math.abs(Math.sin(secs * 4 + i)) * 1.2, Math.sin(ang) * 5 + 1);
+        } else target = (a.station || w.stations.at(-1)).pos(a.slot, secs);
+        const goal = target.clone().setY(target.y + ANIMAL_H / 2);
+        a.sprite.position.lerp(goal, a.station?.name === 'grass' || finale ? 0.08 : 0.25);
+        const since = now - a.bounceAt;
+        if (since < 900) a.sprite.position.y += Math.abs(Math.sin((since / 900) * Math.PI * 2)) * 1.4;
+      }
+      a.shadow.position.set(a.sprite.position.x, 0.03, a.sprite.position.z);
+    });
+    const followPos = w.cam.follow?.sprite.position;
+    const camGoal = followPos ? followPos.clone().add(V(0, 4, 9)) : w.cam.pos;
+    const lookGoal = followPos ? followPos.clone().add(V(0, 0.5, -6)) : w.cam.look;
+    w.camera.position.lerp(camGoal, 0.05);
+    w.look.lerp(lookGoal, 0.07);
+    w.camera.lookAt(w.look);
+    w.renderer.render(w.scene, w.camera);
+  }
+
+  function resize() {
+    if (!w) return;
+    const { clientWidth: wd, clientHeight: h } = root;
+    w.renderer.setSize(wd, h, false);
+    w.camera.aspect = wd / h;
+    w.camera.updateProjectionMatrix();
+  }
+
+  function updateHud() {
+    const { done, total } = counts();
+    hud.counter.replaceChildren(zooCounterText(Badge.cards, state.checkedIn));
+    hud.progress.style.width = `${total ? (100 * done) / total : 0}%`;
+  }
+
+  function teardown() {
+    generation++;
+    tasks.clear();
+    queue = [];
+    busy = false;
+    animals = new Map();
+    removeEventListener('resize', resize);
+    if (w) {
+      cancelAnimationFrame(w.raf);
+      w.renderer.dispose();
+      w = null;
+    }
+  }
+
+  return {
+    id: 'zoo',
+    name: '🎠 Zoo playground (3D)',
+    key: '3',
+    kid: true,
+    skipLabel: '🎉 Start the party',
+    onEnter(r) {
+      root = r;
+      root.className = 'scene scene-zoo3d';
+      state = ZooStore.load();
+      finale = state.open;
+      hud = { counter: el('div', { class: 'zoo-counter' }), progress: el('div', { class: 'zoo-progress-fill' }) };
+      root.append(el('div', { class: 'zoo-top zoo3d-hud' }, hud.counter, el('div', { class: 'zoo-progress' }, hud.progress)));
+      updateHud();
+      w = buildWorld(root);
+      if (!w) {
+        root.append(el('div', { class: 'zoo3d-fallback' }, "3D isn't available here: press ⌥6 for the Zoo Gate"));
+        return;
+      }
+      resize();
+      addEventListener('resize', resize);
+      syncAnimals();
+      if (finale) showFinale(false);
+      w.raf = requestAnimationFrame(frame);
+    },
+    onExit: teardown,
+    onCards() {
+      updateHud();
+      if (w) syncAnimals();
+    },
+    onSkip: () => startParty(),
+    actions: [{
+      label: '🔄 Reset check-ins',
+      run() {
+        state = ZooStore.reset();
+        Badge.show('zoo');
+      },
+    }],
+    onTap(ev) {
+      if (!ev.card) return denied();
+      const card = ev.card;
+      const a = animals.get(card.canonical_id);
+      if (state.checkedIn.includes(card.canonical_id) && !card.away) {
+        if (a) a.bounceAt = performance.now();
+        Sound.tick(4);
+        if (finale) Confetti.burst([card.color.hex]);
+        return;
+      }
+      if (!state.checkedIn.includes(card.canonical_id)) state.checkedIn.push(card.canonical_id);
+      ZooStore.save(state);
+      updateHud();
+      if (!w) return;
+      queue.push(card);
+      drain();
+    },
+    state: () => ({
+      inside: [...animals.values()].filter((a) => a.arrived).map((a) => a.card.canonical_id),
+      queued: queue.length,
+      finale,
+    }),
   };
 })());
 
