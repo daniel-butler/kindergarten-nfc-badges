@@ -21,6 +21,11 @@ module.exports = defineConfig({
     viewport: { width: 1920, height: 1080 },
     trace: 'off',
   },
+  projects: [
+    { name: 'chromium', use: { browserName: 'chromium' } },
+    // The classroom Mac shows the projector page in Firefox: its live connection is checked there too.
+    { name: 'firefox', use: { browserName: 'firefox' }, testMatch: /connection\.spec\.js/ },
+  ],
   webServer: {
     command: `cargo run --quiet --manifest-path ../server/Cargo.toml -- --port ${PORT} --cards "${CARDS}"`,
     url: `http://localhost:${PORT}/api/cards`,

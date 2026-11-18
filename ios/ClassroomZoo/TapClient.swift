@@ -132,6 +132,21 @@ enum TapClient {
         return URL(string: base + path)
     }
 
+    static func logBody(lines: [String]) -> Data {
+        try! JSONSerialization.data(withJSONObject: ["source": "phone", "lines": lines])
+    }
+
+    /// Adds lines to the shared log on the Mac (badge-server.log). True if the server took them.
+    static func postLog(_ lines: [String], server: String) async -> Bool {
+        guard let url = endpoint(server: server, path: "/api/log") else { return false }
+        var request = URLRequest(url: url, timeoutInterval: 4)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = logBody(lines: lines)
+        if case .success = await send(request) { return true }
+        return false
+    }
+
     static func tapBody(id: String) -> Data {
         try! JSONSerialization.data(withJSONObject: ["id": id, "source": "phone"])
     }

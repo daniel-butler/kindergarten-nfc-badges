@@ -5,6 +5,7 @@ struct ContentView: View {
     @StateObject private var scanner = NFCScanner()
     @State private var connection: String?
     @AppStorage("mode") private var mode = Mode.checkIn
+    @Environment(\.scenePhase) private var phase
 
     private enum Mode: String, CaseIterable {
         case checkIn = "Check in"
@@ -38,7 +39,11 @@ struct ContentView: View {
                     HStack {
                         Button("Test connection") {
                             connection = "Checking…"
-                            Task { connection = await TapClient.check(server: serverURL) }
+                            Task {
+                                let result = await TapClient.check(server: serverURL)
+                                connection = result
+                                AppLog.log("test connection to \(serverURL): \(result)")
+                            }
                         }
                         if let connection {
                             Text(connection).font(.footnote)
@@ -50,7 +55,10 @@ struct ContentView: View {
                     ForEach(Mode.allCases, id: \.self) { Text($0.rawValue) }
                 }
                 .pickerStyle(.segmented)
-                .onChange(of: mode) { scanner.stop() }
+                .onChange(of: mode) {
+                    scanner.stop()
+                    AppLog.log("mode → \(mode.rawValue)")
+                }
 
                 switch mode {
                 case .register: RegisterView(server: serverURL, scanner: scanner)
@@ -59,6 +67,19 @@ struct ContentView: View {
                 }
             }
             .padding()
+        }
+        .onAppear {
+            AppLog.server = serverURL
+            AppLog.log("app opened (server \(serverURL), mode \(mode.rawValue))")
+        }
+        .onChange(of: serverURL) { AppLog.server = serverURL }
+        .onChange(of: phase, initial: true) {
+            switch phase {
+            case .active: AppLog.log("app active")
+            case .inactive: AppLog.log("app inactive")
+            case .background: AppLog.log("app in the background")
+            @unknown default: AppLog.log("app phase \(String(describing: phase))")
+            }
         }
     }
 
