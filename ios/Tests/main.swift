@@ -97,8 +97,12 @@ if let server = ProcessInfo.processInfo.environment["BADGE_SERVER"] {
 if let server = ProcessInfo.processInfo.environment["BADGE_SERVER"] {
     let done = DispatchSemaphore(value: 0)
     Task {
-        let status = await TapClient.check(server: server)
-        check(status.hasPrefix("✅ Connected"), "check() against \(server): \(status)")
+        if case .failure(let error) = await TapClient.ping(server: server) {
+            check(false, "ping() against \(server): \(error.localizedDescription)")
+        }
+        if case .success = await TapClient.ping(server: "http://localhost:9") {
+            check(false, "ping() to a closed port should fail")
+        }
         switch await TapClient.post(id: "04A1B2C3D4E5F6", server: server) {
         case .success(let summary): print("live tap → \(summary)")
         case .failure(let error): check(false, "live tap failed: \(error.localizedDescription)")

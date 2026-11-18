@@ -23,8 +23,9 @@ The projector page is `http://localhost:8080/` on the Mac.
    the Mac joins.
 2. Mac: join the iPhone's Wi‑Fi network.
 3. Start the server. Note the `Phone app URL: http://172.20.10.x:8080` line it prints.
-4. In Zookeeper, enter that URL and tap **Test connection** (allow Local Network access when asked).
-   You should see "✅ Connected: N badges".
+4. In Zookeeper, enter that URL (allow Local Network access when asked). The line under it shows
+   "🟢 Connected · N badges", or "🔴 Can't reach the Mac" with the reason. It re-checks every
+   10 seconds and whenever you reopen the app; **Reconnect** checks right away.
 
 **If it doesn't connect:**
 - Check that the server window is still running.
@@ -71,3 +72,10 @@ phone, then on the reader within 5 seconds: the reader's ID gets linked to that 
 Tap **Start Scanning** and hold badges to the phone one after another. Each read buzzes, sends the
 tap, shows the animal, and keeps scanning. iOS ends an NFC session after about a minute; tap Start
 again. A badge left on the phone isn't re-sent within 2 seconds.
+
+## Logs on the phone
+
+Tap **📝 Logs** in Zookeeper to see what the app did: opened, backgrounded, badge reads, what it
+sent and any errors. **Copy** puts it on the clipboard to paste into a message, and **Share** sends
+it as a file. The same lines also go to `~/badge-server.log` on the Mac whenever the app can reach
+it (see the [developer guide](developer.md#the-shared-log)).

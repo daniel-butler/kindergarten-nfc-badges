@@ -4,7 +4,7 @@ const path = require('node:path');
 const { execFile } = require('node:child_process');
 const { promisify } = require('node:util');
 const { test, expect } = require('@playwright/test');
-const { PENGUIN, FOX_TRICK, STAR_SPECIAL, getCards, command, setCards, phoneTap, openScene, logLines } = require('./helpers');
+const { PENGUIN, FOX_TRICK, STAR_SPECIAL, getCards, command, setCards, phoneTap, openScene, logLines, relay } = require('./helpers');
 
 const run = promisify(execFile);
 const IOS = path.resolve(__dirname, '../../ios');
@@ -42,9 +42,9 @@ async function xcodebuild(args, env = {}) {
 }
 
 /** Runs one ClassroomZooUITests method in the simulator; it fails this test if the phone side fails. */
-async function phone(method, { tags = [], expect: shown = '' } = {}) {
+async function phone(method, { tags = [], expect: shown = '', server = SERVER } = {}) {
   const args = ['test-without-building', `-only-testing:ClassroomZooUITests/ClassroomZooUITests/${method}`];
-  const env = { TEST_RUNNER_BADGE_SERVER: SERVER, TEST_RUNNER_ZOO_FAKE_TAGS: tags.join(','), TEST_RUNNER_PHONE_EXPECT: shown };
+  const env = { TEST_RUNNER_BADGE_SERVER: server, TEST_RUNNER_ZOO_FAKE_TAGS: tags.join(','), TEST_RUNNER_PHONE_EXPECT: shown };
   try {
     await xcodebuild(args, env);
   } catch (e) {
@@ -133,4 +133,26 @@ test('Not here today on the phone reaches the projector page', async ({ page, re
   await phone('testRegisterMarksAway', { tags: [PENGUIN.canonical_id], expect: 'Penguin' });
   await expect.poll(async () => (await getCards(request)).find((c) => c.label === 'Penguin').away).toBe(true);
   await expect.poll(() => page.evaluate(() => window.Badge.cards.find((c) => c.label === 'Penguin').away)).toBe(true);
+});
+
+test('the app shows it is connected to the Mac', async () => {
+  await phone('testShowsConnectedToTheMac');
+});
+
+test('reopening the app with the Mac unreachable: it says so, and Reconnect gets it back', async () => {
+  const r = relay();
+  const port = await r.start();
+  r.down();
+  setTimeout(() => r.up(), 15000); // the Mac comes back while the app is showing it can't reach it
+  try {
+    await phone('testReconnectsWhenTheMacComesBack', { server: `http://localhost:${port}` });
+  } finally {
+    await r.stop();
+  }
+  expect(logLines().some((l) => /\[phone\] \S+ can't reach the Mac/.test(l))).toBe(true);
+  expect(logLines().some((l) => /\[phone\] \S+ connected to the Mac/.test(l))).toBe(true);
+});
+
+test("the app's log can be read, copied and shared on the phone", async () => {
+  await phone('testLogsCanBeCopied');
 });

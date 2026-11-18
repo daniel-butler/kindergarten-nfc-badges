@@ -89,3 +89,30 @@ function logLines() {
   return require('node:fs').existsSync(file) ? require('node:fs').readFileSync(file, 'utf8').split('\n') : [];
 }
 module.exports.logLines = logLines;
+
+/** A TCP relay in front of the server: `cut()` drops every open connection, `down()` refuses new ones. */
+function relay() {
+  const sockets = new Set();
+  let refusing = false;
+  const server = require('node:net').createServer((client) => {
+    if (refusing) return client.destroy();
+    const upstream = require('node:net').connect(8181, '127.0.0.1');
+    for (const s of [client, upstream]) {
+      sockets.add(s);
+      s.on('close', () => sockets.delete(s));
+      s.on('error', () => {});
+    }
+    client.pipe(upstream).pipe(client);
+    client.on('close', () => upstream.destroy());
+    upstream.on('close', () => client.destroy());
+  });
+  return {
+    start: () => new Promise((ok) => server.listen(0, '127.0.0.1', () => ok(server.address().port))),
+    cut: () => sockets.forEach((s) => s.destroy()),
+    down() { refusing = true; this.cut(); },
+    up() { refusing = false; },
+    stop: () => new Promise((ok) => { sockets.forEach((s) => s.destroy()); server.close(ok); }),
+  };
+}
+
+module.exports.relay = relay;

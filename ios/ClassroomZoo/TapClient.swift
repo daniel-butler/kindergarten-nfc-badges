@@ -257,15 +257,14 @@ enum TapClient {
         return decoded(await send(URLRequest(url: url, timeoutInterval: 3)), as: PresenterDTO.self)
     }
 
-    /// GET /api/cards; returns a one-line status for the "Test connection" button.
-    static func check(server: String) async -> String {
-        guard let url = endpoint(server: server, path: "/api/cards") else { return "⚠️ Bad server URL" }
-        do {
-            let (data, _) = try await URLSession.shared.data(for: URLRequest(url: url, timeoutInterval: 4))
-            let cards = (try? JSONSerialization.jsonObject(with: data)) as? [Any]
-            return cards.map { "✅ Connected: \($0.count) badges" } ?? "⚠️ Unexpected reply"
-        } catch {
-            return "⚠️ \(error.localizedDescription)"
+    /// GET /api/cards: is the Mac there, and how many badges does it know?
+    static func ping(server: String) async -> Result<Int, Error> {
+        guard let url = endpoint(server: server, path: "/api/cards") else { return .failure(Failure.badURL(server)) }
+        return await send(URLRequest(url: url, timeoutInterval: 4)).flatMap { data in
+            guard let cards = (try? JSONSerialization.jsonObject(with: data)) as? [Any] else {
+                return .failure(Failure.server(200, "unexpected reply"))
+            }
+            return .success(cards.count)
         }
     }
 }
