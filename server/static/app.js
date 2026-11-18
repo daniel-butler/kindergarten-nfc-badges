@@ -1016,9 +1016,13 @@ function zooListOverlay(state, scribble) {
 
 /**
  * Tap rules shared by both zoo scenes. Hooks: root(), state(), enter(card), inside(card),
- * tallyChanged(), party(), reset().
+ * tallyChanged(), party(), reset(), and optionally keptOut(card) / denied(card) (default: the
+ * flat goose and padlock overlays), voting(card, show) to play something before calling show() for
+ * the vote card, and voted() when the vote is decided.
  */
 function createZooFlow(h) {
+  const keptOut = h.keptOut || ((card) => zooGoose(h.root(), card));
+  const denied = h.denied || ((card) => zooSpecialDenied(h.root(), card));
   const VOTE_MIN_MS = 1000; // a vote must be on screen this long before a decision counts
   let pending = null; // trick card waiting for the class vote
   let pendingSince = 0;
@@ -1046,14 +1050,21 @@ function createZooFlow(h) {
     switch (zooDecide(state, card)) {
       case 'unknown': return zooRetry(h.root());
       case 'inside': return h.inside(card);
-      case 'kept-out': return zooGoose(h.root(), card);
-      case 'special-denied': return zooSpecialDenied(h.root(), card);
-      case 'vote':
+      case 'kept-out': return keptOut(card);
+      case 'special-denied': return denied(card);
+      case 'vote': {
         pending = card;
-        pendingSince = performance.now();
-        h.root().append(zooVoteOverlay(card));
-        Sound.wonder();
+        pendingSince = Infinity; // can't be decided until the class sees the vote card
+        const show = () => {
+          if (pending !== card || h.root().querySelector('.zoo-vote')) return;
+          pendingSince = performance.now();
+          h.root().append(zooVoteOverlay(card));
+          Sound.wonder();
+        };
+        if (h.voting) h.voting(card, show);
+        else show();
         return;
+      }
       default:
         zooAdmit(state, card);
         h.tallyChanged();
@@ -1071,6 +1082,7 @@ function createZooFlow(h) {
     const card = pending;
     pending = null;
     h.root().querySelector('.zoo-vote')?.remove();
+    h.voted?.();
     const state = h.state();
     state.tricks[card.canonical_id] = letIn ? 'in' : 'out';
     if (letIn) {
@@ -1079,7 +1091,7 @@ function createZooFlow(h) {
       h.enter(card);
     } else {
       ZooStore.save(state);
-      zooGoose(h.root(), card);
+      keptOut(card);
     }
     const waiting = deferred;
     deferred = [];
@@ -1099,7 +1111,8 @@ function createZooFlow(h) {
     },
     /** The scene redrew itself: put the vote card back if a vote is still open. */
     restore() {
-      if (pending && !h.root().querySelector('.zoo-vote')) h.root().append(zooVoteOverlay(pending));
+      const shown = pendingSince !== Infinity;
+      if (pending && shown && !h.root().querySelector('.zoo-vote')) h.root().append(zooVoteOverlay(pending));
     },
     command(action) {
       if (action === 'let-in') decide(true);
@@ -1655,14 +1668,19 @@ Badge.registerScene((() => {
   const OVERVIEW = { pos: [0, 19, 29], look: [0, 0, 1.5] };
   const PARTY_VIEW = { pos: [0, 11, 21], look: [0, 1.5, 0] };
   const AT_GATE = { pos: [0, 5, 35], look: [0, 2.2, 20] };
+  const GOOSE_IDLE_TURN = 0.45; // facing the path, a little toward the visitors
+  const LOCK_SIZE = 1.4;
 
   let root;
   let state;
   let w = null; // three.js world while the scene is open
   let animals = new Map(); // canonical_id -> { card, sprite, shadow, arrived, station, slot, phase, bounceAt }
-  let queue = [];
+  let queue = []; // jobs at the gate: { card, act: 'arrive' | 'bye' | 'no' }
   let busy = false;
   let finale = false;
+  let gatekeeper = 'idle'; // the goose: 'idle', 'curious' (trick vote), 'bye' (kept out), 'no' (special denied)
+  let voteDecided = null; // resolves the trick vote waiting at the gate
+  let visitor = null; // canonical_id of a sticker turned away at the gate
   let generation = 0;
   let hud;
 
@@ -1780,6 +1798,88 @@ Badge.registerScene((() => {
       scene.add(rail);
     }
     return doors;
+  }
+
+  /** The gatekeeper goose: stands beside the gate, waves a wing, shakes its head. */
+  function buildGoose(scene) {
+    // A touch of glow keeps the goose white instead of picking up the grass's green.
+    const white = new THREE.MeshLambertMaterial({ color: '#f4f2ea', emissive: '#45453f' });
+    const orange = lam('#ff9f1c');
+    const ink = lam('#1d2251');
+    const pink = lam('#ffb3c7');
+    const sphere = (r, m) => new THREE.Mesh(new THREE.SphereGeometry(r, 20, 16), m);
+    const goose = new THREE.Group();
+
+    const body = sphere(1, white);
+    body.scale.set(0.95, 0.8, 1.25);
+    body.position.set(0, 1.55, -0.2);
+    const tail = new THREE.Mesh(new THREE.ConeGeometry(0.45, 0.9, 12), white);
+    tail.rotation.x = -Math.PI / 2 + 0.5;
+    tail.position.set(0, 1.9, -1.5);
+    const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.26, 0.36, 1.7, 16), white);
+    neck.rotation.x = 0.25;
+    neck.position.set(0, 2.75, 0.75);
+
+    const head = new THREE.Group();
+    head.position.set(0, 3.6, 0.95);
+    const beak = new THREE.Mesh(new THREE.ConeGeometry(0.18, 0.6, 12), orange);
+    beak.rotation.x = Math.PI / 2;
+    beak.position.set(0, -0.08, 0.6);
+    head.add(sphere(0.48, white), beak);
+    for (const side of [-1, 1]) {
+      const eye = sphere(0.09, ink);
+      eye.position.set(side * 0.27, 0.1, 0.33);
+      const cheek = sphere(0.1, pink);
+      cheek.scale.set(1, 0.6, 0.4);
+      cheek.position.set(side * 0.34, -0.1, 0.27);
+      head.add(eye, cheek);
+    }
+
+    const wings = {};
+    for (const side of [-1, 1]) {
+      const pivot = new THREE.Group();
+      pivot.position.set(side * 0.85, 1.9, -0.1);
+      const wing = sphere(1, white);
+      wing.scale.set(0.18, 0.55, 0.95);
+      wing.position.set(side * 0.08, -0.35, -0.25);
+      pivot.add(wing);
+      wings[side] = pivot;
+      const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 0.8, 8), orange);
+      leg.position.set(side * 0.35, 0.4, 0.05);
+      const foot = box(0.45, 0.08, 0.6, '#ff9f1c');
+      foot.position.set(side * 0.35, 0.04, 0.25);
+      goose.add(pivot, leg, foot);
+    }
+    goose.add(body, tail, neck, head);
+    goose.position.set(-3.6, 0, GATE_Z + 2.8);
+    goose.rotation.y = GOOSE_IDLE_TURN;
+    goose.userData.model = 'goose';
+    const shadow = blob(2.8);
+    shadow.position.set(goose.position.x, 0.03, goose.position.z);
+    scene.add(goose, shadow);
+    return { goose, head, wings };
+  }
+
+  /** A shiny padlock that pops onto the gate doors when the special badge isn't on the list yet. */
+  function buildPadlock(scene) {
+    const gold = new THREE.MeshPhongMaterial({ color: '#e9b824', shininess: 90, specular: '#fff6c0' });
+    const steel = new THREE.MeshPhongMaterial({ color: '#cfd4da', shininess: 120, specular: '#ffffff' });
+    const lock = new THREE.Group(); // pivots at the top of the shackle, so it swings like it's hanging
+    const body = new THREE.Mesh(new THREE.BoxGeometry(1.5, 1.25, 0.55), gold);
+    body.position.y = -1.15;
+    const shackle = new THREE.Mesh(new THREE.TorusGeometry(0.48, 0.13, 12, 28, Math.PI), steel);
+    shackle.position.y = -0.52;
+    const hole = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.13, 0.08, 16), lam('#3b2a14'));
+    hole.rotation.x = Math.PI / 2;
+    hole.position.set(0, -1.05, 0.29);
+    const slot = box(0.09, 0.3, 0.08, '#3b2a14');
+    slot.position.set(0, -1.28, 0.29);
+    lock.add(body, shackle, hole, slot);
+    lock.position.set(0, 3.2, GATE_Z + 0.4);
+    lock.visible = false;
+    lock.userData.model = 'padlock';
+    scene.add(lock);
+    return lock;
   }
 
   // Each station places an animal for a slot at time t (seconds).
@@ -1912,10 +2012,12 @@ Badge.registerScene((() => {
       scene.add(trunk, top);
     }
     const doors = buildGate(scene);
+    const goose = buildGoose(scene);
+    const padlock = buildPadlock(scene);
     const stations = buildPlayground(scene);
     const look = V(...OVERVIEW.look);
     return {
-      renderer, scene, camera, doors, stations, look,
+      renderer, scene, camera, doors, goose, padlock, stations, look,
       cam: { pos: V(...OVERVIEW.pos), look: V(...OVERVIEW.look), follow: null },
       reassignAt: performance.now() + REASSIGN_MS,
       raf: 0,
@@ -1955,7 +2057,7 @@ Badge.registerScene((() => {
 
   function syncAnimals() {
     // Kids still waiting at the gate get their sticker when their turn comes, not here.
-    const waiting = new Set(queue.map((c) => c.canonical_id));
+    const waiting = new Set(queue.filter((j) => j.act === 'arrive').map((j) => j.card.canonical_id));
     const want = state.checkedIn.map(cardById).filter((c) => c && !c.away && !waiting.has(c.canonical_id));
     const ids = new Set(want.map((c) => c.canonical_id));
     for (const id of [...animals.keys()]) if (!ids.has(id) && !waiting.has(id)) removeAnimal(id);
@@ -2044,11 +2146,115 @@ Badge.registerScene((() => {
     if (!queue.length) setCam(OVERVIEW);
   }
 
+  // ---------- at the gate ----------
+  /** Trick badge: it walks up to the gate, the goose looks it over, then the class votes. */
+  async function waitForVote(card, show) {
+    const gen = generation;
+    const g = w.goose;
+    w.cam.follow = null;
+    setCam(AT_GATE);
+    const sticker = spriteOf(cardTexture(card));
+    const shadow = blob(2);
+    w.scene.add(sticker, shadow);
+    visitor = card.canonical_id;
+    gatekeeper = 'curious';
+    const decided = new Promise((resolve) => { voteDecided = resolve; });
+    const home = V(0, ANIMAL_H / 2, OUTSIDE_Z);
+    const faceVisitor = Math.atan2(home.x - g.goose.position.x, home.z - g.goose.position.z);
+    const turnFrom = g.goose.rotation.y;
+    await tween(1100, (t) => {
+      sticker.position.set(home.x, ANIMAL_H / 2 + Math.abs(Math.sin(t * Math.PI * 3)) * 0.6, home.z + (1 - t) * 5);
+      shadow.position.set(home.x, 0.03, sticker.position.z);
+      g.goose.rotation.y = turnFrom + (faceVisitor - turnFrom) * Math.min(1, t * 2);
+      g.head.rotation.z = Math.min(1, t * 2) * 0.35; // head tilt: hmm, who's this?
+    });
+    if (gen !== generation) return;
+    show();
+    await decided;
+    voteDecided = null;
+    if (gen !== generation) return;
+    w.scene.remove(sticker, shadow);
+    g.head.rotation.z = 0;
+    visitor = null;
+    gatekeeper = 'idle';
+  }
+
+  // ---------- turned away at the gate ----------
+  /** 'bye': kept out by the class vote, the goose waves it off. 'no': the special badge isn't on the list yet. */
+  async function turnAway(card, act) {
+    const gen = generation;
+    const g = w.goose;
+    w.cam.follow = null;
+    setCam(AT_GATE);
+    const sticker = spriteOf(cardTexture(card));
+    const home = act === 'no' ? V(2.3, ANIMAL_H / 2, OUTSIDE_Z - 2) : V(0, ANIMAL_H / 2, OUTSIDE_Z);
+    sticker.position.copy(home);
+    const shadow = blob(2);
+    w.scene.add(sticker, shadow);
+    const follow = () => shadow.position.set(sticker.position.x, 0.03, sticker.position.z);
+    follow();
+    visitor = card.canonical_id;
+    gatekeeper = act;
+    const faceVisitor = Math.atan2(home.x - g.goose.position.x, home.z - g.goose.position.z);
+    const turnFrom = g.goose.rotation.y;
+    await tween(300, (t) => { g.goose.rotation.y = turnFrom + (faceVisitor - turnFrom) * t; });
+    if (gen !== generation) return;
+    Sound.honk();
+
+    if (act === 'no') {
+      const lock = w.padlock;
+      lock.visible = true;
+      Badge.later(() => Sound.silly(), 550);
+      await tween(2600, (t) => {
+        const pop = Math.min(1, t * 8);
+        lock.scale.setScalar(LOCK_SIZE * (pop < 1 ? pop * 1.25 : 1));
+        lock.rotation.z = Math.sin(t * Math.PI * 14) * 0.28;
+        g.head.rotation.y = Math.sin(t * Math.PI * 12) * 0.6;
+        sticker.position.x = home.x + Math.sin(t * Math.PI * 3) * 0.4; // peeking
+      });
+      if (gen !== generation) return;
+      await tween(300, (t) => lock.scale.setScalar(LOCK_SIZE * (1 - t)));
+      if (gen !== generation) return;
+      lock.visible = false;
+    } else {
+      const bubble = new THREE.Sprite(new THREE.SpriteMaterial({ map: textTexture('Bye-bye!', { size: 80 }), transparent: true }));
+      bubble.scale.set(5, 1.25, 1);
+      w.scene.add(bubble);
+      await tween(2600, (t) => {
+        g.wings[1].rotation.z = 0.9 + Math.sin(t * Math.PI * 12) * 0.6;
+        const away = Math.max(0, (t - 0.35) / 0.65);
+        sticker.position.z = home.z + away * 9;
+        sticker.position.y = ANIMAL_H / 2 + Math.abs(Math.sin(away * Math.PI * 4)) * 0.7;
+        sticker.material.opacity = 1 - Math.max(0, (away - 0.6) / 0.4);
+        bubble.position.set(sticker.position.x, ANIMAL_H + 1.4, sticker.position.z);
+        bubble.material.opacity = sticker.material.opacity;
+        follow();
+      });
+      if (gen !== generation) return;
+      w.scene.remove(bubble);
+      g.wings[1].rotation.z = 0;
+    }
+    w.scene.remove(sticker, shadow);
+    g.head.rotation.y = 0;
+    visitor = null;
+    gatekeeper = 'idle';
+    if (!queue.length) setCam(OVERVIEW);
+  }
+
   async function drain() {
     if (busy) return;
     busy = true;
     while (queue.length && w) {
-      const card = queue.shift();
+      const job = queue.shift();
+      const { card, act } = job;
+      if (act === 'vote') {
+        await waitForVote(card, job.show);
+        continue;
+      }
+      if (act !== 'arrive') {
+        await turnAway(card, act);
+        continue;
+      }
       await arrive(card);
       if (card.role === 'special' && w) Badge.later(startParty, PARTY_DELAY_MS);
     }
@@ -2113,6 +2319,11 @@ Badge.registerScene((() => {
       }
       a.shadow.position.set(a.sprite.position.x, 0.03, a.sprite.position.z);
     });
+    if (gatekeeper === 'idle') {
+      const g = w.goose;
+      g.goose.rotation.y += (GOOSE_IDLE_TURN - g.goose.rotation.y) * 0.05;
+      g.head.rotation.x = Math.sin(secs * 1.6) * 0.12; // little nods while it keeps watch
+    }
     const followPos = w.cam.follow?.sprite.position;
     const camGoal = followPos ? followPos.clone().add(V(0, 4, 9)) : w.cam.pos;
     const lookGoal = followPos ? followPos.clone().add(V(0, 0.5, -6)) : w.cam.look;
@@ -2139,6 +2350,9 @@ Badge.registerScene((() => {
     tasks.clear();
     queue = [];
     busy = false;
+    gatekeeper = 'idle';
+    visitor = null;
+    voteDecided = null;
     animals = new Map();
     removeEventListener('resize', resize);
     if (w) {
@@ -2153,7 +2367,23 @@ Badge.registerScene((() => {
     state: () => state,
     enter(card) {
       if (!w) return;
-      queue.push(card);
+      queue.push({ card, act: 'arrive' });
+      drain();
+    },
+    voting(card, show) {
+      if (!w) return show();
+      queue.push({ card, act: 'vote', show });
+      drain();
+    },
+    voted: () => voteDecided?.(),
+    keptOut(card) {
+      if (!w) return zooGoose(root, card);
+      queue.push({ card, act: 'bye' });
+      drain();
+    },
+    denied(card) {
+      if (!w) return zooSpecialDenied(root, card);
+      queue.push({ card, act: 'no' });
       drain();
     },
     inside(card) {
@@ -2206,7 +2436,10 @@ Badge.registerScene((() => {
     onTap: (ev) => flow.tap(ev),
     state: () => ({
       pendingVote: flow.pendingVote,
-      specialDenied: !!root.querySelector('.zoo-special-denied'),
+      specialDenied: gatekeeper === 'no' || queue.some((j) => j.act === 'no') || !!root.querySelector('.zoo-special-denied'),
+      gatekeeper,
+      visitor,
+      models: { goose: !!w?.goose, padlock: !!w?.padlock.visible },
       listOpen: !!root.querySelector('.zoo-list'),
       inside: [...animals.values()].filter((a) => a.arrived).map((a) => a.card.canonical_id),
       queued: queue.length,

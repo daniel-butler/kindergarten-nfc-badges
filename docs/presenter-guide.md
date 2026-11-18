@@ -73,15 +73,19 @@ card.
 - **Tally:** marks at the top, in groups of five. One mark for each normal entry, each trick badge
   voted in, and the special badge.
 - **Unknown badge:** a small "Oops! Tap again 🔄" with a soft boop. Nobody goes in.
-- **🎭 Trick badge:** shows its stored animal and color with a bouncing "?" and 👍 Let in / 👎 Keep
-  out. Kids vote with thumbs; you press **⌥Y** / **⌥N** (or use the phone). The vote needs a second
-  on screen before a decision counts, so a double press can't skip the next vote.
+- **🪿 The gatekeeper goose** stands beside the gate the whole time, nodding while it keeps watch.
+- **🎭 Trick badge:** its sticker walks up to the gate and the goose tilts its head at it. Then the
+  vote card shows its stored animal and color with a bouncing "?" and 👍 Let in / 👎 Keep out. Kids
+  vote with thumbs; you press **⌥Y** / **⌥N** (or use the phone). The vote needs a second on screen
+  before a decision counts, so a double press can't skip the next vote, and a press before the card
+  shows is ignored.
   - **Let in:** it walks in with confetti and adds a mark.
-  - **Keep out:** the gatekeeper goose 🪿 waves it bye-bye with a honk.
+  - **Keep out:** the goose honks and waves a wing, and the sticker hops away under a "Bye-bye!"
+    sign.
   - Taps that arrive during a vote wait their turn.
 - **⭐ Special badge:**
-  - At first it's denied: it peeks at the gate, the goose honks and shakes its head, and the
-    padlock wobbles.
+  - At first it's denied: it peeks at the gate, a big gold padlock pops onto the doors and wobbles,
+    and the goose honks and shakes its head.
   - Press **⌥A** (Allow): the **Zoo List** pops up with everyone inside, and a pencil scribbles the
     special badge in.
   - The special badge's next tap walks it in, adds a mark, and **starts the party**. **⌥S** starts
@@ -91,8 +95,8 @@ card.
 
 ### 🏰 Zoo Gate (⌥6, backup)
 
-The earlier flat version, with the same rules, tally and check-ins. Switch to it if the 3D scene
-stutters on the classroom computer.
+The earlier flat version, with the same rules, tally and check-ins (its goose and padlock are flat
+pictures). Switch to it if the 3D scene stutters on the classroom computer.
 
 ### 🔢 Secret Number (⌥2)
 

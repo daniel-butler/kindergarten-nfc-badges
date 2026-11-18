@@ -7,6 +7,7 @@ const OWL_AWAY = { canonical_id: '04BEEFBEEFBEEF', emoji: '🦉', label: 'Owl', 
 const zooState = (page) => page.evaluate(() => window.Badge.current.state());
 const inside = async (page) => (await zooState(page)).inside;
 const tally = (page, n) => page.locator(`.zoo-tally[data-count="${n}"]`);
+const gatekeeper = async (page) => (await zooState(page)).gatekeeper;
 const spyBuzzer = (page) => page.evaluate(() => {
   window.__buzzes = 0;
   const original = window.Badge.sound.buzzer;
@@ -100,6 +101,11 @@ test('everyone normal going in does not start the party by itself', async ({ pag
   expect((await zooState(page)).finale).toBe(false);
 });
 
+test('the gatekeeper goose stands at the gate as a 3D model, with no padlock yet', async ({ page }) => {
+  await openScene(page, 'zoo', 4);
+  expect(await zooState(page)).toMatchObject({ models: { goose: true, padlock: false }, gatekeeper: 'idle', visitor: null });
+});
+
 test('Option+S starts the party', async ({ page }) => {
   await openScene(page, 'zoo', 4);
   await page.keyboard.press('Alt+s');
@@ -160,6 +166,25 @@ test('check-ins and tally survive reload and are shared with the backup Zoo Gate
 });
 
 test.describe('trick badge votes', () => {
+  test('the trick badge walks up to the gate and the goose looks it over before the vote card shows', async ({ page, request }) => {
+    await openScene(page, 'zoo', 4);
+    await phoneTap(request, FOX_TRICK.canonical_id);
+    await expect.poll(() => gatekeeper(page)).toBe('curious');
+    expect(await zooState(page)).toMatchObject({ visitor: FOX_TRICK.canonical_id, pendingVote: FOX_TRICK.canonical_id });
+    await expect(page.locator('.zoo-vote')).toHaveCount(0);
+    await expect(page.locator('.zoo-vote')).toBeVisible();
+    expect(await gatekeeper(page)).toBe('curious'); // the fox waits at the gate during the vote
+  });
+
+  test('Let in pressed before the vote card shows does nothing', async ({ page, request }) => {
+    await openScene(page, 'zoo', 4);
+    await phoneTap(request, FOX_TRICK.canonical_id);
+    await expect.poll(() => gatekeeper(page)).toBe('curious');
+    await page.keyboard.press('Alt+y');
+    await expect(page.locator('.zoo-vote')).toBeVisible();
+    expect(await zooState(page)).toMatchObject({ pendingVote: FOX_TRICK.canonical_id, tally: 0 });
+  });
+
   test('a trick badge shows the vote with its stored animal; nobody goes in yet', async ({ page, request }) => {
     await openScene(page, 'zoo', 4);
     await phoneTap(request, FOX_TRICK.canonical_id);
@@ -194,12 +219,14 @@ test.describe('trick badge votes', () => {
     await page.waitForTimeout(1100); // the class votes
     await page.keyboard.press('Alt+n');
     await expect(page.locator('.zoo-vote')).toHaveCount(0);
-    await expect(page.locator('.zoo-goose')).toBeVisible();
-    await expect(page.locator('.zoo-goose')).toContainText('🪿');
+    await expect.poll(() => gatekeeper(page)).toBe('bye');
+    expect((await zooState(page)).visitor).toBe(FOX_TRICK.canonical_id);
+    await expect(page.locator('.zoo-goose')).toHaveCount(0); // the 3D goose, not the flat one
     await expect(tally(page, 0)).toBeVisible();
-    await page.waitForTimeout(3000);
+    await expect.poll(() => gatekeeper(page), { timeout: 8000 }).toBe('idle');
+    expect((await zooState(page)).visitor).toBe(null);
     await phoneTap(request, FOX_TRICK.canonical_id);
-    await expect(page.locator('.zoo-goose')).toBeVisible();
+    await expect.poll(() => gatekeeper(page)).toBe('bye');
     await expect(page.locator('.zoo-vote')).toHaveCount(0);
     expect(await zooState(page)).toMatchObject({ inside: [], tally: 0 });
   });
@@ -272,12 +299,15 @@ test.describe('special badge finale', () => {
   test('before Allow: silly denial with the goose and the padlock; nobody goes in', async ({ page, request }) => {
     await openScene(page, 'zoo', 5);
     await tapStar(request);
-    const denied = page.locator('.zoo-special-denied');
-    await expect(denied).toBeVisible();
-    await expect(denied).toContainText('🪿');
-    await expect(denied).toContainText('🔒');
-    await expect(denied).toContainText('⭐');
-    expect(await zooState(page)).toMatchObject({ specialDenied: true, inside: [], tally: 0, finale: false });
+    await expect.poll(() => gatekeeper(page)).toBe('no');
+    await expect.poll(async () => (await zooState(page)).models.padlock).toBe(true); // pops in once the goose turns
+    expect(await zooState(page)).toMatchObject({
+      specialDenied: true, visitor: STAR_SPECIAL.canonical_id, models: { goose: true, padlock: true },
+      inside: [], tally: 0, finale: false,
+    });
+    await expect(page.locator('.zoo-special-denied')).toHaveCount(0); // the 3D padlock, not the flat one
+    await expect.poll(() => gatekeeper(page), { timeout: 8000 }).toBe('idle');
+    expect(await zooState(page)).toMatchObject({ specialDenied: false, visitor: null, models: { padlock: false } });
   });
 
   test('Option+A shows the Zoo List with everyone inside and scribbles the special in', async ({ page, request }) => {
@@ -323,7 +353,7 @@ test.describe('special badge finale', () => {
     await resetKeys(page);
     await expect.poll(async () => (await getCards(request)).find((c) => c.role === 'special').allowed).toBe(false);
     await tapStar(request);
-    await expect(page.locator('.zoo-special-denied')).toBeVisible();
+    await expect.poll(() => gatekeeper(page)).toBe('no');
     expect((await zooState(page)).tally).toBe(0);
   });
 });

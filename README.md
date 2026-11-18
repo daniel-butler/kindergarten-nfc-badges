@@ -16,9 +16,9 @@ special badge gets turned away until the very end, and everyone ends at a party.
 | ![A sticker animal arriving at the ZOO gate with confetti](docs/images/zoo-arrival.jpg) | ![Animals playing on the slide, swings and merry-go-round](docs/images/zoo-playground.jpg) |
 | **Tap in.** Your own animal (a photo of *your* sticker) arrives at the gate with confetti in your badge's color. | **Play.** Everyone who's in plays on the slide, swings, seesaw and merry-go-round. Tally marks count who's here. |
 | ![Trick badge vote: let it in or keep it out](docs/images/trick-vote.jpg) | ![The gatekeeper goose waves a trick badge bye-bye](docs/images/goose.jpg) |
-| **Trick badges.** Is that really the right animal and color? Thumbs up or down! | **Keep out?** The gatekeeper goose waves it bye-bye with a honk. |
+| **Trick badges.** Is that really the right animal and color? Thumbs up or down! | **Keep out?** The gatekeeper goose honks and waves it bye-bye. |
 | ![The special badge is denied at the gate](docs/images/special-denied.jpg) | ![The Zoo List with the special badge being scribbled in](docs/images/zoo-list.jpg) |
-| **The special badge** isn't on the list… the goose says no and the padlock wobbles. | **Add it to the Zoo List**, tap again, and the party starts. |
+| **The special badge** isn't on the list… the padlock pops on and the goose says no. | **Add it to the Zoo List**, tap again, and the party starts. |
 
 Unknown badges get a gentle "Oops! Tap again 🔄" (no red, no buzzer). There's also a
 **Secret Number** scene that reveals the number hidden inside a badge, **The List** that shows

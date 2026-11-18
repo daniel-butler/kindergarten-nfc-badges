@@ -48,7 +48,8 @@ function phone(method, { tags = [], expect: shown = '' } = {}) {
 }
 
 const tally = (page, n) => page.locator(`.zoo-tally[data-count="${n}"]`);
-const inside = (page) => page.evaluate(() => window.Badge.current.state().inside);
+const zooState = (page) => page.evaluate(() => window.Badge.current.state());
+const inside = async (page) => (await zooState(page)).inside;
 
 test.beforeAll(async () => {
   test.setTimeout(900_000);
@@ -91,14 +92,14 @@ test('Keep out from the phone sends the trick badge away with the goose', async 
   await expect(tally(page, 0)).toBeVisible();
   // The goose only waves for a moment; tapping the kept-out badge again brings it back, not a new vote.
   await phoneTap(request, FOX_TRICK.canonical_id);
-  await expect(page.locator('.zoo-goose')).toBeVisible();
+  await expect.poll(async () => (await zooState(page)).gatekeeper).toBe('bye');
   await expect(page.locator('.zoo-vote')).toHaveCount(0);
 });
 
 test('Allow special from the phone opens the Zoo List; the special then starts the party', async ({ page, request }) => {
   await openScene(page, 'zoo', 3);
   await phoneTap(request, STAR_SPECIAL.canonical_id);
-  await expect(page.locator('.zoo-special-denied')).toBeVisible();
+  await expect.poll(async () => (await zooState(page)).specialDenied).toBe(true);
   await phone('testPresenterAllowsSpecial', { expect: 'Star' });
   await expect(page.locator(`.zoo-list-new[data-id="${STAR_SPECIAL.canonical_id}"]`)).toBeVisible();
   await page.waitForTimeout(1600); // same badge again within 1.5 s is ignored as a repeat
