@@ -47,7 +47,7 @@ directly.
 
 ## Badge roles
 
-Set a role when registering a badge, in Zoo Tap's **Register** tab or in **⌥1 Setup**.
+Set a role when registering a badge, in Zookeeper's **Register** tab or in **⌥1 Setup**.
 
 - **Normal:** walks into the zoo and adds a tally mark.
 - **🎭 Trick:** the stored animal or color is deliberately wrong (photograph a spare sticker for
@@ -72,27 +72,37 @@ card.
   in a row queue up and arrive faster.
 - **Tally:** marks at the top, in groups of five. One mark for each normal entry, each trick badge
   voted in, and the special badge.
-- **Unknown badge:** a small "Oops! Tap again 🔄" with a soft boop. Nobody goes in.
-- **🎭 Trick badge:** shows its stored animal and color with a bouncing "?" and 👍 Let in / 👎 Keep
-  out. Kids vote with thumbs; you press **⌥Y** / **⌥N** (or use the phone). The vote needs a second
-  on screen before a decision counts, so a double press can't skip the next vote.
+- **Unknown badge:** a blank "?" card hops up to the gate and the goose tilts its head, then a
+  small "Oops! Tap again 🔄" with a soft boop. Nobody goes in.
+- **Tapping again when already inside:** that animal runs to the gate and waves hello through the
+  bars.
+- **🪿 The gatekeeper goose** stands beside the gate the whole time, nodding while it keeps watch.
+- **🎭 Trick badge:** its sticker walks up to the gate and the goose tilts its head at it. Then the
+  vote card shows its stored animal and color with a bouncing "?" and 👍 Let in / 👎 Keep out. Kids
+  vote with thumbs; you press **⌥Y** / **⌥N** (or use the phone). The vote needs a second on screen
+  before a decision counts, so a double press can't skip the next vote, and a press before the card
+  shows is ignored.
   - **Let in:** it walks in with confetti and adds a mark.
-  - **Keep out:** the gatekeeper goose 🪿 waves it bye-bye with a honk.
+  - **Keep out:** the goose honks and waves a wing, and the sticker hops away under a "Bye-bye!"
+    sign.
   - Taps that arrive during a vote wait their turn.
 - **⭐ Special badge:**
-  - At first it's denied: it peeks at the gate, the goose honks and shakes its head, and the
-    padlock wobbles.
-  - Press **⌥A** (Allow): the **Zoo List** pops up with everyone inside, and a pencil scribbles the
-    special badge in.
+  - At first it's denied: it peeks at the gate, a big gold padlock pops onto the doors and wobbles,
+    and the goose honks and shakes its head.
+  - Press **⌥A** (Allow): the goose holds up its clipboard at the gate, then the **Zoo List** pops
+    up with everyone inside, and a pencil scribbles the special badge in. (If an animal is still
+    walking in, the list waits for it.) **⌥L** shows the list the same way.
   - The special badge's next tap walks it in, adds a mark, and **starts the party**. **⌥S** starts
     the party any time.
+- **🎉 Party:** balloons float up, everyone dances in a ring with the goose in the middle, then
+  "Congratulations, Official Zookeepers!" appears.
 - **Saved:** check-ins survive a page reload. **⌥R ⌥R**, or Reset on the phone, clears everything
   and denies the special badge again.
 
 ### 🏰 Zoo Gate (⌥6, backup)
 
-The earlier flat version, with the same rules, tally and check-ins. Switch to it if the 3D scene
-stutters on the classroom computer.
+The earlier flat version, with the same rules, tally and check-ins (its goose and padlock are flat
+pictures). Switch to it if the 3D scene stutters on the classroom computer.
 
 ### 🔢 Secret Number (⌥2)
 
@@ -123,7 +133,7 @@ gentle retry. **⌥S** skips. Every present card is asked once before any repeat
 The **presenter panel** (**⌥P**) has the zoo buttons, **💤 Everyone's here** (clears every 💤), and
 the last unknown badge's ID.
 
-## The phone remote (Zoo Tap → Presenter)
+## The phone remote (Zookeeper → Presenter)
 
 <img src="images/phone-presenter.jpg" alt="Presenter tab" width="260" align="right">
 
@@ -156,8 +166,8 @@ everything in **⌥0 Debug**.
 **The night before**
 - [ ] `cargo build --release`, and keep `server/target/release/badge-server` somewhere safe.
 - [ ] Start it with `--cards ~/cards.json` (photos are saved in `~/images/`).
-- [ ] Zoo Tap is on the iPhone (reinstall from Xcode if it won't open).
-- [ ] Zoo Tap → **Register**: scan each badge, snap its sticker, name it, and pick its cardstock
+- [ ] Zookeeper is on the iPhone (reinstall from Xcode if it won't open).
+- [ ] Zookeeper → **Register**: scan each badge, snap its sticker, name it, and pick its cardstock
       color and role. Three 🎭 trick badges (photograph a spare sticker for them) and one ⭐ special.
 - [ ] Tap every badge on the **USB reader** with ⌥1 Setup open. For any that show the picker
       instead of the card: tap it on the phone, then on the reader within 5 s, to link them.
@@ -176,8 +186,8 @@ everything in **⌥0 Debug**.
 - [ ] Projector volume up; ⌥P → Chime plays.
 - [ ] ⌥P shows 🟢 Connected and the right card count. Press **💤 Everyone's here** if any 💤 are
       left over from last time.
-- [ ] Zoo Tap → **Register**: scan each badge you're holding back → **💤 Not here today**.
-- [ ] Zoo Tap → **Check in**: server URL set, **Test connection** shows ✅, Start Scanning. One test
+- [ ] Zookeeper → **Register**: scan each badge you're holding back → **💤 Not here today**.
+- [ ] Zookeeper → **Check in**: server URL set, **Test connection** shows ✅, Start Scanning. One test
       tap shows in ⌥0 Debug as 📱 phone.
 - [ ] Reader: one test tap shows as ⌨️ reader. Typing test mode is **off**.
 - [ ] **Reset** (phone, or ⌥R twice) right before the kids start.

@@ -7,7 +7,7 @@
 | Path      | What |
 |-----------|------|
 | `server/` | Rust (axum) server: tap pipeline, badge ID matching, card registry, sticker photos, commands, SSE. The projector page (`server/static/`, vanilla JS + three.js r128) is embedded in the binary. |
-| `ios/`    | **Zoo Tap**: SwiftUI + Core NFC. Check in, Register (camera + Vision cutout + edge cleanup), and the Presenter remote. |
+| `ios/`    | **Zookeeper**: SwiftUI + Core NFC. Check in, Register (camera + Vision cutout + edge cleanup), and the Presenter remote. |
 | `e2e/`    | Playwright end-to-end tests against a real server and browser. |
 | `docs/`   | Guides, design notes (`superpowers/specs`) and plans (`superpowers/plans`). |
 
@@ -66,7 +66,7 @@ BADGE_SERVER=localhost:8080 /tmp/tapcheck            # also talks to a running s
 cd e2e && npm run test:phone
 ```
 
-These tests run **Zoo Tap in the iOS simulator** against the same server as the projector page. Each
+These tests run **Zookeeper in the iOS simulator** against the same server as the projector page. Each
 Playwright test sets up the server and the page, runs one XCUITest from
 `ios/UITests/ClassroomZooUITests.swift` that presses the app's real buttons, then checks the page:
 

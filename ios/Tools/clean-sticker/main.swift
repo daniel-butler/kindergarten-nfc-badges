@@ -1,4 +1,4 @@
-// Runs the same cutout + edge cleanup as Zoo Tap, on a Mac:
+// Runs the same cutout + edge cleanup as Zookeeper, on a Mac:
 //   swiftc -O Tools/clean-sticker/main.swift ClassroomZoo/StickerEdges.swift -o /tmp/clean-sticker
 //   /tmp/clean-sticker <photo-or-cutout> <out-sticker.png> [<out-app-icon.png>]
 // A photo without transparency is lifted with Vision first, like the phone does.

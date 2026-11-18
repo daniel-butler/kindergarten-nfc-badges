@@ -1,4 +1,4 @@
-// Phone + page together: Zoo Tap runs in the iOS simulator (XCUITest presses its real buttons)
+// Phone + page together: Zookeeper runs in the iOS simulator (XCUITest presses its real buttons)
 // against the same server as the projector page. Needs Xcode; run with `npm run test:phone`.
 const path = require('node:path');
 const { execFile } = require('node:child_process');
@@ -12,7 +12,7 @@ const DERIVED = path.resolve(__dirname, '../.ios-build');
 const SERVER = 'http://localhost:8181';
 
 test.skip(!process.env.BADGE_PHONE_E2E, 'needs Xcode and an iOS simulator: npm run test:phone');
-test.describe.configure({ timeout: 240_000 });
+test.describe.configure({ timeout: 360_000 });
 
 /** BADGE_SIM, else a booted iPhone simulator, else the first available one. */
 async function simulator() {
@@ -33,22 +33,30 @@ async function xcodebuild(args, env = {}) {
     await run('xcodebuild', all, { env: { ...process.env, ...env }, maxBuffer: 64 * 1024 * 1024 });
   } catch (e) {
     const out = `${e.stdout ?? ''}\n${e.stderr ?? ''}`;
-    const failures = out.split('\n').filter((l) => /error|failed|XCTAssert/i.test(l)).slice(-25).join('\n');
+    const lines = out.split('\n');
+    // The Swift assertion line says what went wrong; simulator log noise also says "failed".
+    const asserts = lines.filter((l) => /\.swift:\d+: error/.test(l));
+    const failures = (asserts.length ? asserts : lines.filter((l) => /error|failed|XCTAssert/i.test(l)).slice(-25)).join('\n');
     throw new Error(`xcodebuild ${args[0]} failed:\n${failures || out.slice(-4000)}`);
   }
 }
 
 /** Runs one ClassroomZooUITests method in the simulator; it fails this test if the phone side fails. */
-function phone(method, { tags = [], expect: shown = '' } = {}) {
-  return xcodebuild(['test-without-building', `-only-testing:ClassroomZooUITests/ClassroomZooUITests/${method}`], {
-    TEST_RUNNER_BADGE_SERVER: SERVER,
-    TEST_RUNNER_ZOO_FAKE_TAGS: tags.join(','),
-    TEST_RUNNER_PHONE_EXPECT: shown,
-  });
+async function phone(method, { tags = [], expect: shown = '' } = {}) {
+  const args = ['test-without-building', `-only-testing:ClassroomZooUITests/ClassroomZooUITests/${method}`];
+  const env = { TEST_RUNNER_BADGE_SERVER: SERVER, TEST_RUNNER_ZOO_FAKE_TAGS: tags.join(','), TEST_RUNNER_PHONE_EXPECT: shown };
+  try {
+    await xcodebuild(args, env);
+  } catch (e) {
+    // The simulator sometimes drops the test runner before it starts; that says nothing about the app.
+    if (!/never finished bootstrapping/.test(e.message)) throw e;
+    await xcodebuild(args, env);
+  }
 }
 
 const tally = (page, n) => page.locator(`.zoo-tally[data-count="${n}"]`);
-const inside = (page) => page.evaluate(() => window.Badge.current.state().inside);
+const zooState = (page) => page.evaluate(() => window.Badge.current.state());
+const inside = async (page) => (await zooState(page)).inside;
 
 test.beforeAll(async () => {
   test.setTimeout(900_000);
@@ -91,16 +99,17 @@ test('Keep out from the phone sends the trick badge away with the goose', async 
   await expect(tally(page, 0)).toBeVisible();
   // The goose only waves for a moment; tapping the kept-out badge again brings it back, not a new vote.
   await phoneTap(request, FOX_TRICK.canonical_id);
-  await expect(page.locator('.zoo-goose')).toBeVisible();
+  await expect.poll(async () => (await zooState(page)).gatekeeper).toBe('bye');
   await expect(page.locator('.zoo-vote')).toHaveCount(0);
 });
 
 test('Allow special from the phone opens the Zoo List; the special then starts the party', async ({ page, request }) => {
   await openScene(page, 'zoo', 3);
   await phoneTap(request, STAR_SPECIAL.canonical_id);
-  await expect(page.locator('.zoo-special-denied')).toBeVisible();
+  await expect.poll(async () => (await zooState(page)).specialDenied).toBe(true);
   await phone('testPresenterAllowsSpecial', { expect: 'Star' });
-  await expect(page.locator(`.zoo-list-new[data-id="${STAR_SPECIAL.canonical_id}"]`)).toBeVisible();
+  // The list waits for the goose's clipboard (and any gate moment before it); slow on CI's software 3D.
+  await expect(page.locator(`.zoo-list-new[data-id="${STAR_SPECIAL.canonical_id}"]`)).toBeVisible({ timeout: 20000 });
   await page.waitForTimeout(1600); // same badge again within 1.5 s is ignored as a repeat
   await phoneTap(request, STAR_SPECIAL.canonical_id);
   await expect(page.locator('.zoo3d-finale')).toContainText('Congratulations, Official Zookeepers!', { timeout: 20000 });

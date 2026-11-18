@@ -21,7 +21,7 @@ struct ContentView: View {
                         .scaledToFit()
                         .frame(height: 64)
                         .accessibilityHidden(true)
-                    Text("Zoo Tap")
+                    Text("Zookeeper")
                         .font(.largeTitle.bold())
                 }
 

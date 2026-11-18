@@ -16,9 +16,9 @@ special badge gets turned away until the very end, and everyone ends at a party.
 | ![A sticker animal arriving at the ZOO gate with confetti](docs/images/zoo-arrival.jpg) | ![Animals playing on the slide, swings and merry-go-round](docs/images/zoo-playground.jpg) |
 | **Tap in.** Your own animal (a photo of *your* sticker) arrives at the gate with confetti in your badge's color. | **Play.** Everyone who's in plays on the slide, swings, seesaw and merry-go-round. Tally marks count who's here. |
 | ![Trick badge vote: let it in or keep it out](docs/images/trick-vote.jpg) | ![The gatekeeper goose waves a trick badge bye-bye](docs/images/goose.jpg) |
-| **Trick badges.** Is that really the right animal and color? Thumbs up or down! | **Keep out?** The gatekeeper goose waves it bye-bye with a honk. |
+| **Trick badges.** Is that really the right animal and color? Thumbs up or down! | **Keep out?** The gatekeeper goose honks and waves it bye-bye. |
 | ![The special badge is denied at the gate](docs/images/special-denied.jpg) | ![The Zoo List with the special badge being scribbled in](docs/images/zoo-list.jpg) |
-| **The special badge** isn't on the list… the goose says no and the padlock wobbles. | **Add it to the Zoo List**, tap again, and the party starts. |
+| **The special badge** isn't on the list… the padlock pops on and the goose says no. | **Add it to the Zoo List**, tap again, and the party starts. |
 
 Unknown badges get a gentle "Oops! Tap again 🔄" (no red, no buzzer). There's also a
 **Secret Number** scene that reveals the number hidden inside a badge, **The List** that shows
@@ -30,11 +30,11 @@ the computer looking it up, and a **Who has the 🐼?** game.
 
 ## What the presenter uses
 
-<img src="docs/images/phone-presenter.jpg" alt="Zoo Tap's Presenter tab on an iPhone" width="260" align="right">
+<img src="docs/images/phone-presenter.jpg" alt="Zookeeper's Presenter tab on an iPhone" width="260" align="right">
 
 - **A Mac** runs everything offline and drives the projector.
 - **A USB badge reader** and/or **an iPhone** read the badges.
-- **Zoo Tap**, the iPhone app, registers badges (it photographs each sticker and cuts it out
+- **Zookeeper**, the iPhone app, registers badges (it photographs each sticker and cuts it out
   automatically) and is your **remote**: Let in / Keep out, Allow special, Zoo List, Party,
   scene switching, and a Help sheet with every Mac shortcut as a fallback.
 
@@ -57,7 +57,7 @@ No hardware yet? Press **⌥T** and type a badge ID, or `curl` a tap; see the
 
 - 🎤 **[Presenter guide](docs/presenter-guide.md)**: lesson flow, every scene, keyboard shortcuts,
   the phone remote, and a pre-class checklist.
-- 🛠️ **[Setup guide](docs/setup.md)**: running the server, the iPhone hotspot, installing Zoo Tap,
+- 🛠️ **[Setup guide](docs/setup.md)**: running the server, the iPhone hotspot, installing Zookeeper,
   and registering badges with sticker photos.
 - 👩‍💻 **[Developer guide](docs/developer.md)**: how it's built, the HTTP API, badge ID matching,
   tests, and adding your own scene.

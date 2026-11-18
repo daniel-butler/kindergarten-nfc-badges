@@ -31,6 +31,7 @@ final class ClassroomZooUITests: XCTestCase {
 
     func testCheckInSendsTaps() {
         let app = launch(mode: "Check in")
+        XCTAssert(text(app, "Zookeeper").waitForExistence(timeout: wait), "the app is called Zookeeper")
         app.buttons["Start Scanning"].tap()
         XCTAssert(text(app, expected).waitForExistence(timeout: wait), "phone shows \(expected)")
     }
