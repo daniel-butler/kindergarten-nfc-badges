@@ -4,6 +4,12 @@ struct ContentView: View {
     @AppStorage("serverURL") private var serverURL = "http://172.20.10.2:8080"
     @StateObject private var scanner = NFCScanner()
     @State private var connection: String?
+    @State private var mode = Mode.checkIn
+
+    private enum Mode: String, CaseIterable {
+        case checkIn = "Check in"
+        case register = "Register"
+    }
 
     var body: some View {
         ScrollView {
@@ -32,6 +38,24 @@ struct ContentView: View {
                     }
                 }
 
+                Picker("Mode", selection: $mode) {
+                    ForEach(Mode.allCases, id: \.self) { Text($0.rawValue) }
+                }
+                .pickerStyle(.segmented)
+                .onChange(of: mode) { scanner.stop() }
+
+                if mode == .register {
+                    RegisterView(server: serverURL, scanner: scanner)
+                } else {
+                    checkInView
+                }
+            }
+            .padding()
+        }
+    }
+
+    private var checkInView: some View {
+        VStack(spacing: 24) {
                 Button {
                     scanner.serverURL = serverURL
                     if scanner.isScanning { scanner.stop() } else { scanner.start() }
@@ -59,8 +83,6 @@ struct ContentView: View {
                     }
                     .frame(maxWidth: .infinity)
                 }
-            }
-            .padding()
         }
     }
 }

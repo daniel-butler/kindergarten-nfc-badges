@@ -26,6 +26,45 @@ check(TapClient.summary(of: Data(known.utf8)) == "🐧 Penguin", "summary of kno
 let unknown = #"{"raw_id":"x","canonical_id":"DEADBEEF","source":"phone","card":null,"ts":1}"#
 check(TapClient.summary(of: Data(unknown.utf8)) == "❓ Unknown badge DEADBEEF", "summary of unknown card")
 
+check(TapClient.emoji(forName: "panda") == "🐼", "emoji for panda")
+check(TapClient.emoji(forName: "Fairy Frog") == "🐸", "emoji matches any word")
+check(TapClient.emoji(forName: "Budgie") == "🐦", "emoji for budgie")
+check(TapClient.emoji(forName: "Zork") == "🐾", "emoji fallback")
+
+check(TapClient.cardstockColors.count == 13, "13 cardstock colors")
+check(TapClient.cardstockColors.contains(ColorDTO(hex: "#1E5BD8", name: "Blue")), "Blue matches the page")
+
+let minimal = ##"{"canonical_id":"04A1","aliases":[],"emoji":"🐼","label":"Panda","color":{"hex":"#1E5BD8","name":"Blue"}}"##
+let decoded = try! JSONDecoder().decode(CardDTO.self, from: Data(minimal.utf8))
+check(decoded.trick == false && decoded.away == false && decoded.image == nil, "CardDTO defaults")
+let full = ##"{"canonical_id":"04A1","aliases":["X"],"emoji":"🐼","label":"Panda","color":{"hex":"#1E5BD8","name":"Blue"},"trick":true,"away":true,"image":"/images/04A1.png?v=1"}"##
+let decodedFull = try! JSONDecoder().decode(CardDTO.self, from: Data(full.utf8))
+check(decodedFull.trick && decodedFull.away && decodedFull.image == "/images/04A1.png?v=1", "CardDTO full decode")
+let encoded = try! JSONSerialization.jsonObject(with: JSONEncoder().encode(decodedFull)) as! [String: Any]
+check(encoded["trick"] as? Bool == true && encoded["away"] as? Bool == true, "CardDTO encodes trick and away")
+
+if let server = ProcessInfo.processInfo.environment["BADGE_SERVER"] {
+    let registered = DispatchSemaphore(value: 0)
+    Task {
+        let card = CardDTO(canonical_id: "04C0FFEE123456", emoji: "🐼", label: "Panda", color: ColorDTO(hex: "#1E5BD8", name: "Blue"))
+        switch await TapClient.upsert(card, server: server) {
+        case .success(let saved): check(saved.canonical_id == "04C0FFEE123456", "upsert returns the card")
+        case .failure(let error): check(false, "upsert failed: \(error.localizedDescription)")
+        }
+        switch await TapClient.resolve(id: "563412EE", server: server) {
+        case .success(let r): check(r.card?.label == "Panda", "resolve finds the card from a reader-form id")
+        case .failure(let error): check(false, "resolve failed: \(error.localizedDescription)")
+        }
+        let png = Data(base64Encoded: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==")!
+        switch await TapClient.uploadImage(png, id: "04C0FFEE123456", server: server) {
+        case .success(let c): check(c.image?.hasPrefix("/images/04C0FFEE123456.png?v=") == true, "upload sets image")
+        case .failure(let error): check(false, "upload failed: \(error.localizedDescription)")
+        }
+        registered.signal()
+    }
+    registered.wait()
+}
+
 if let server = ProcessInfo.processInfo.environment["BADGE_SERVER"] {
     let done = DispatchSemaphore(value: 0)
     Task {

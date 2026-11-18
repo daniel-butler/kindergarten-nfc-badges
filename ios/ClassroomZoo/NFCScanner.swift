@@ -22,10 +22,17 @@ final class NFCScanner: NSObject, ObservableObject {
     var serverURL = ""
 
     private var session: NFCTagReaderSession?
+    /// Set while registering: the session reads one badge, hands its UID here, and ends.
+    private var onceHandler: ((String) -> Void)?
     private var lastSent: (id: String, at: Date)?
     private let haptics = UINotificationFeedbackGenerator()
 
-    func start() {
+    func scanOnce(_ done: @escaping (String) -> Void) {
+        onceHandler = done
+        start(message: "Hold the badge you're registering near the top of the iPhone.")
+    }
+
+    func start(message: String = "Hold a zoo badge near the top of the iPhone.") {
         guard NFCTagReaderSession.readingAvailable else {
             status = "NFC isn't available on this device"
             return
@@ -35,7 +42,7 @@ final class NFCScanner: NSObject, ObservableObject {
             status = "Couldn't start NFC"
             return
         }
-        session.alertMessage = "Hold a zoo badge near the top of the iPhone."
+        session.alertMessage = message
         self.session = session
         session.begin()
         isScanning = true
@@ -49,6 +56,14 @@ final class NFCScanner: NSObject, ObservableObject {
 
     fileprivate func handle(id: String, session: NFCTagReaderSession) {
         lastID = id
+        if let done = onceHandler {
+            onceHandler = nil
+            haptics.notificationOccurred(.success)
+            session.alertMessage = "Got it!"
+            session.invalidate()
+            done(id)
+            return
+        }
         let now = Date()
         if let last = lastSent, last.id == id, now.timeIntervalSince(last.at) < duplicateWindow {
             restart(session)
@@ -81,6 +96,7 @@ final class NFCScanner: NSObject, ObservableObject {
     }
 
     fileprivate func ended(_ error: Error) {
+        onceHandler = nil
         isScanning = false
         session = nil
         switch (error as? NFCReaderError)?.code {
