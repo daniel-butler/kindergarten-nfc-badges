@@ -147,47 +147,6 @@ const Sound = (() => {
 })();
 
 // ===================================================================
-// Voice (speechSynthesis with the Mac's built-in offline voices)
-// ===================================================================
-
-const Voice = (() => {
-  const supported = 'speechSynthesis' in window;
-  const history = [];
-  let enabled = true;
-  let voice = null;
-
-  function pickVoice() {
-    const local = speechSynthesis.getVoices().filter((v) => v.localService && v.lang.startsWith('en'));
-    voice = local.find((v) => /Samantha|Karen|Daniel/.test(v.name)) || local[0] || null;
-  }
-  if (supported) {
-    pickVoice();
-    speechSynthesis.addEventListener('voiceschanged', pickVoice);
-  }
-
-  return {
-    history,
-    get enabled() { return enabled; },
-    set enabled(value) {
-      enabled = value;
-      if (!value && supported) speechSynthesis.cancel();
-    },
-    /** Speak a short phrase. `queue` keeps earlier phrases instead of cutting them off. */
-    say(text, { queue = false, rate = 0.95, pitch = 1.25 } = {}) {
-      history.push(text);
-      if (history.length > 50) history.shift();
-      if (!enabled || !supported || Sound.muted) return;
-      if (!queue) speechSynthesis.cancel();
-      const u = new SpeechSynthesisUtterance(text);
-      if (voice) u.voice = voice;
-      u.rate = rate;
-      u.pitch = pitch;
-      speechSynthesis.speak(u);
-    },
-  };
-})();
-
-// ===================================================================
 // Confetti (canvas)
 // ===================================================================
 
@@ -295,7 +254,6 @@ const Badge = (() => {
     ANIMALS,
     COLORS,
     sound: Sound,
-    voice: Voice,
     confetti: Confetti,
     get connected() { return connected; },
     get current() { return current; },
@@ -548,14 +506,12 @@ const Panel = (() => {
       ...(current?.actions || []).map((a) => button(a.label, null, a.run)),
       button('Fullscreen', '⌥F', fullscreen, !!document.fullscreenElement),
       button(Sound.muted ? 'Sound: OFF' : 'Sound: on', '⌥M', () => (Sound.muted = !Sound.muted), Sound.muted),
-      button(Voice.enabled ? 'Voice: on' : 'Voice: OFF', '⌥V', () => (Voice.enabled = !Voice.enabled), !Voice.enabled),
       button(Reader.testMode ? 'Typing test mode: ON' : 'Typing test mode: off', '⌥T', () => Reader.toggleTestMode(), Reader.testMode),
       el('h2', {}, 'Test'),
       button('Chime', null, () => Sound.chime()),
       button('Buzzer', null, () => Sound.buzzer()),
       button('Silly buzzer', null, () => Sound.silly()),
       button('Fanfare', null, () => Sound.fanfare()),
-      button('Voice', null, () => Voice.say('Hello, zookeepers!')),
       button('Confetti', null, () => Confetti.burst()),
       el('h2', {}, 'Status'),
       el('div', {}, `${Badge.connected ? '🟢 Connected' : '🔴 Disconnected'} · ${Badge.cards.length} cards`),
@@ -574,7 +530,6 @@ const Panel = (() => {
     else if (code === 'KeyF') fullscreen();
     else if (code === 'KeyS') Badge.current?.onSkip?.();
     else if (code === 'KeyM') Sound.muted = !Sound.muted;
-    else if (code === 'KeyV') Voice.enabled = !Voice.enabled;
     else if (code === 'KeyT') Reader.toggleTestMode();
     else handled = false;
     if (handled) {
@@ -793,12 +748,10 @@ Badge.registerScene((() => {
     root.replaceChildren(
       el('div', { class: 'title' }, '🤫 The secret number is…'),
       el('div', { class: 'digits', style: `--n:${chars.length}` }, digits));
-    Voice.say('The secret number is');
     timers = digits.map((d, i) => Badge.later(() => {
       d.classList.remove('hidden');
       d.classList.add('pop');
       Sound.tick(i);
-      Voice.say(chars[i] === '0' ? 'zero' : chars[i], { queue: true, rate: 1.1 });
     }, FIRST_DIGIT_MS + i * DIGIT_MS));
     timers.push(Badge.later(() => Sound.chime(), FIRST_DIGIT_MS + chars.length * DIGIT_MS + 100));
   }
@@ -981,7 +934,6 @@ Badge.registerScene((() => {
     }, el('div', { class: 'bob ring', style: `background:${card.color.hex}` }, card.emoji));
     root.append(walker);
     hint(`Welcome, ${card.label} keeper!`);
-    Voice.say(`Welcome, ${card.label} keeper!`);
     hintTimer = Badge.later(idleHint, WALK_MS + 800);
     walking++;
     els.gate.classList.add('ajar');
@@ -1006,7 +958,6 @@ Badge.registerScene((() => {
 
   function denied() {
     Sound.buzzer();
-    Voice.say('Access denied!', { pitch: 1.6 });
     Badge.cancel(deniedTimer);
     root.querySelector('.zoo-denied')?.remove();
     root.append(el('div', { class: 'zoo-denied' },
@@ -1023,7 +974,6 @@ Badge.registerScene((() => {
     els.gate?.classList.remove('ajar');
     els.gate?.classList.add('open');
     Sound.fanfare();
-    Voice.say('Everyone is here! Open the gate!');
     Confetti.rain(colors());
     Badge.later(parade, 1600);
   }
@@ -1054,7 +1004,6 @@ Badge.registerScene((() => {
       el('div', { class: 'finale-animals' }, Badge.cards.map((c) => ring(c, 10)))));
     if (celebrate) {
       Sound.fanfare();
-      Voice.say('Congratulations, Official Zookeepers!');
       Confetti.rain(colors(), { count: 450 });
     }
   }
@@ -1216,10 +1165,8 @@ Badge.registerScene((() => {
         render();
         if (ev.card) {
           Sound.chime();
-          Voice.say(`Found it! ${ev.card.label}!`);
         } else {
           Sound.buzzer();
-          Voice.say('Not on the list!', { pitch: 1.6 });
         }
       }, (stop + 1) * SCAN_ROW_MS + 150));
     },
@@ -1270,15 +1217,10 @@ Badge.registerScene((() => {
       el('div', { class: 'big-label' }, `${target.label}?`));
   }
 
-  function askAloud() {
-    ask();
-    if (target) Voice.say(`Who has the ${target.label}?`);
-  }
-
   function next() {
     Badge.cancel(timer);
     pickNext();
-    askAloud();
+    ask();
   }
 
   return {
@@ -1312,13 +1254,11 @@ Badge.registerScene((() => {
           cardCircle(target),
           el('div', { class: 'big-label' }, `It's the ${target.label}!`));
         Sound.chime();
-        Voice.say(`Yes! It's the ${target.label}!`);
         Confetti.burst([target.color.hex], { y: 0.45, count: 260 });
         timer = Badge.later(next, NEXT_AFTER_CORRECT_MS);
         return;
       }
       Sound.silly();
-      Voice.say(ev.card ? `Nope! That's the ${ev.card.label}!` : 'Nope! Not a zoo badge!', { pitch: 1.5 });
       root.className = 'scene scene-who nope';
       root.replaceChildren(
         el('div', { class: 'title shake' }, 'Nope! 🙈'),
