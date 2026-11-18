@@ -49,3 +49,23 @@ jobs:
         run: |
           xcodebuild -project ClassroomZoo.xcodeproj -scheme ClassroomZoo \
             -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build
+
+  phone-page:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: server
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: e2e/package-lock.json
+      - name: Phone + page e2e (Zoo Tap in the simulator)
+        working-directory: e2e
+        run: |
+          npm ci
+          npx playwright install chromium
+          npm run test:phone

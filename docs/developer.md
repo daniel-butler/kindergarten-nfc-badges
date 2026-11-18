@@ -60,8 +60,31 @@ cd ios && swiftc ClassroomZoo/TapClient.swift ClassroomZoo/StickerEdges.swift Te
 BADGE_SERVER=localhost:8080 /tmp/tapcheck            # also talks to a running server
 ```
 
+### Phone and page together
+
+```sh
+cd e2e && npm run test:phone
+```
+
+These tests run **Zoo Tap in the iOS simulator** against the same server as the projector page. Each
+Playwright test sets up the server and the page, runs one XCUITest from
+`ios/UITests/ClassroomZooUITests.swift` that presses the app's real buttons, then checks the page:
+
+- a badge read on the phone walks into the zoo
+- the waiting trick badge shows on the phone; Let in / Keep out decide the vote
+- Allow special opens the Zoo List, and the special's next tap starts the party
+- Reset empties the zoo
+- 💤 Not here today reaches the page
+
+The simulator has no NFC, so debug builds read badge IDs from `ZOO_FAKE_TAGS` instead (release
+builds don't contain this). The tests need Xcode. They use a booted iPhone simulator, or the first
+available one (set `BADGE_SIM` to a simulator ID to choose). The first run builds the app into
+`e2e/.ios-build/`. A plain `npm test` skips them.
+
+### CI
+
 CI (GitHub Actions) runs `cargo fmt`, `clippy -D warnings`, the Rust tests and the e2e suite on
-Linux, and builds the iOS app and runs the Swift checks on macOS.
+Linux. On macOS it runs the Swift checks, builds the iOS app, and runs the phone + page tests.
 
 The sticker cleanup also runs on a Mac:
 `swiftc -O ios/Tools/clean-sticker/main.swift ios/ClassroomZoo/StickerEdges.swift -o /tmp/clean-sticker`,
