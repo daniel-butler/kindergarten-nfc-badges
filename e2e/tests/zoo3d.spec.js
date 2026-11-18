@@ -159,6 +159,78 @@ test('check-ins and tally survive reload and are shared with the backup Zoo Gate
   await expect(tally(page, 1)).toBeVisible();
 });
 
+test.describe('trick badge votes', () => {
+  test('a trick badge shows the vote with its stored animal; nobody goes in yet', async ({ page, request }) => {
+    await openScene(page, 'zoo', 4);
+    await phoneTap(request, FOX_TRICK.canonical_id);
+    const vote = page.locator('.zoo-vote');
+    await expect(vote).toBeVisible();
+    await expect(vote).toContainText('🦊');
+    await expect(vote.locator('.vote-question')).toHaveText('?');
+    await expect(vote.locator('.vote-yes')).toHaveText('👍 Let it in');
+    await expect(vote.locator('.vote-no')).toHaveText('👎 Keep it out');
+    expect(await zooState(page)).toMatchObject({ pendingVote: FOX_TRICK.canonical_id, tally: 0, inside: [] });
+  });
+
+  test('Option+Y lets it in: it enters with a tally mark', async ({ page, request }) => {
+    await openScene(page, 'zoo', 4);
+    await phoneTap(request, FOX_TRICK.canonical_id);
+    await expect(page.locator('.zoo-vote')).toBeVisible();
+    await page.keyboard.press('Alt+y');
+    await expect(page.locator('.zoo-vote')).toHaveCount(0);
+    await expect(tally(page, 1)).toBeVisible();
+    await expect.poll(() => inside(page), { timeout: 15000 }).toContain(FOX_TRICK.canonical_id);
+    await phoneTap(request, PENGUIN.canonical_id);
+    await phoneTap(request, FOX_TRICK.canonical_id); // already in: no second vote
+    await page.waitForTimeout(300);
+    await expect(page.locator('.zoo-vote')).toHaveCount(0);
+  });
+
+  test('Option+N keeps it out: goose bye-bye, no entry, no mark; tapping again gets the goose again', async ({ page, request }) => {
+    await openScene(page, 'zoo', 4);
+    await phoneTap(request, FOX_TRICK.canonical_id);
+    await expect(page.locator('.zoo-vote')).toBeVisible();
+    await page.keyboard.press('Alt+n');
+    await expect(page.locator('.zoo-vote')).toHaveCount(0);
+    await expect(page.locator('.zoo-goose')).toBeVisible();
+    await expect(page.locator('.zoo-goose')).toContainText('🪿');
+    await expect(tally(page, 0)).toBeVisible();
+    await page.waitForTimeout(3000);
+    await phoneTap(request, FOX_TRICK.canonical_id);
+    await expect(page.locator('.zoo-goose')).toBeVisible();
+    await expect(page.locator('.zoo-vote')).toHaveCount(0);
+    expect(await zooState(page)).toMatchObject({ inside: [], tally: 0 });
+  });
+
+  test('let-in from the phone works too', async ({ page, request }) => {
+    await openScene(page, 'zoo', 4);
+    await phoneTap(request, FOX_TRICK.canonical_id);
+    await expect(page.locator('.zoo-vote')).toBeVisible();
+    await command(request, 'let-in');
+    await expect(tally(page, 1)).toBeVisible();
+    await expect(page.locator('.zoo-vote')).toHaveCount(0);
+  });
+
+  test('a tap during a vote waits, then goes in after the decision', async ({ page, request }) => {
+    await openScene(page, 'zoo', 4);
+    await phoneTap(request, FOX_TRICK.canonical_id);
+    await expect(page.locator('.zoo-vote')).toBeVisible();
+    await phoneTap(request, PENGUIN.canonical_id);
+    await page.waitForTimeout(800);
+    expect(await zooState(page)).toMatchObject({ tally: 0, inside: [] });
+    await page.keyboard.press('Alt+n');
+    await expect(tally(page, 1)).toBeVisible();
+    await expect.poll(() => inside(page), { timeout: 15000 }).toEqual([PENGUIN.canonical_id]);
+  });
+
+  test('let in with nothing waiting changes nothing', async ({ page }) => {
+    await openScene(page, 'zoo', 4);
+    await page.keyboard.press('Alt+y');
+    await expect(page.locator('#banner')).toContainText('Nothing is waiting');
+    expect(await zooState(page)).toMatchObject({ tally: 0, inside: [] });
+  });
+});
+
 test('without WebGL the scene points to the backup', async ({ page }) => {
   await page.addInitScript(() => {
     const original = HTMLCanvasElement.prototype.getContext;

@@ -27,6 +27,15 @@ test.describe('Zoo Gate (backup, ⌥6)', () => {
     await expect(tally(page, 1)).toBeVisible();
   });
 
+  test('trick badges get the same vote in the backup', async ({ page, request }) => {
+    await openScene(page, 'gate', 3);
+    await phoneTap(request, FOX_TRICK.canonical_id);
+    await expect(page.locator('.zoo-vote')).toBeVisible();
+    await page.keyboard.press('Alt+y');
+    await expect(tally(page, 1)).toBeVisible();
+    await expect(slot(page, FOX_TRICK)).toBeVisible({ timeout: 5000 });
+  });
+
   test('Option+S opens the gate, parades, and congratulates', async ({ page, request }) => {
     await openScene(page, 'gate', 3);
     await phoneTap(request, PENGUIN.canonical_id);

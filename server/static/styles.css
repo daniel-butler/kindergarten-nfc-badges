@@ -668,3 +668,55 @@ body.kid-mode .scene-who.nope .title, body.kid-mode .scene-who.nope .big-label {
   font-size: 5vmin;
   white-space: nowrap;
 }
+
+/* ---------- zoo: trick vote and goose ---------- */
+
+.zoo-vote, .zoo-goose {
+  position: absolute;
+  inset: 0;
+  z-index: 11;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4vmin;
+}
+
+.zoo-vote { background: rgba(217, 245, 255, 0.82); }
+.vote-card { position: relative; }
+.zoo-vote .badge-circle { width: 44vmin; height: 44vmin; }
+.zoo-vote .badge-circle .emoji-art { font-size: 28vmin !important; }
+.zoo-vote .badge-circle .sticker { height: 34vmin !important; max-height: 34vmin; }
+
+.vote-question {
+  position: absolute;
+  top: -8vmin;
+  right: -10vmin;
+  font-size: 24vmin;
+  font-weight: 900;
+  color: #e8590c;
+  text-shadow: 0 1vmin 0 #fff;
+  animation: q-bounce 0.7s ease-in-out infinite alternate;
+}
+@keyframes q-bounce { from { transform: translateY(0) rotate(-8deg); } to { transform: translateY(-4vmin) rotate(8deg); } }
+
+.vote-choices { display: flex; gap: 6vmin; }
+.vote-yes, .vote-no {
+  font-size: 7vmin;
+  padding: 2vmin 5vmin;
+  border-radius: 5vmin;
+  border: 0.8vmin solid var(--ink);
+  color: var(--ink);
+}
+.vote-yes { background: #b2f2bb; }
+.vote-no { background: #ffc9c9; }
+
+.zoo-goose { pointer-events: none; background: rgba(217, 245, 255, 0.7); }
+.goose-row { display: flex; align-items: flex-end; gap: 6vmin; }
+.bye-sticker { animation: bye-slide 2.4s ease-in forwards; }
+@keyframes bye-slide { 30% { transform: translateX(0) rotate(0); } to { transform: translateX(-60vw) rotate(-25deg); opacity: 0; } }
+.goose { font-family: var(--emoji); font-size: 26vmin; line-height: 1; position: relative; animation: goose-honk 0.3s ease-in-out 6 alternate; }
+.goose-wave { position: absolute; right: -8vmin; top: 2vmin; font-size: 12vmin; animation: wave 0.35s ease-in-out infinite alternate; transform-origin: bottom center; }
+@keyframes goose-honk { to { transform: rotate(-8deg) scale(1.05); } }
+@keyframes wave { from { transform: rotate(-20deg); } to { transform: rotate(25deg); } }
+.goose-text { font-size: 9vmin; color: var(--ink); text-shadow: 0 0.6vmin 0 #fff; }

@@ -117,6 +117,11 @@ const Sound = (() => {
       tone(520, 0, 0.14, { type: 'sine', gain: 0.18, slideTo: 400 });
       tone(400, 0.13, 0.18, { type: 'sine', gain: 0.15, slideTo: 330 });
     },
+    /** Curious "hmm?" for a vote. */
+    wonder() {
+      tone(392, 0, 0.22, { type: 'triangle', gain: 0.2 });
+      tone(523, 0.2, 0.4, { type: 'triangle', gain: 0.2, slideTo: 660, vibrato: 6 });
+    },
     /** Gatekeeper goose. */
     honk() {
       [0, 0.28].forEach((s) => {
@@ -877,10 +882,15 @@ const ZooStore = (() => {
   };
 })();
 
-/** What a tap means in a zoo scene: 'unknown' | 'inside' | 'enter'. */
+/** What a tap means in a zoo scene: 'unknown' | 'inside' | 'vote' | 'kept-out' | 'enter'. */
 function zooDecide(state, card) {
   if (!card) return 'unknown';
   if (state.checkedIn.includes(card.canonical_id) && !card.away) return 'inside';
+  if (card.role === 'trick') {
+    const verdict = state.tricks[card.canonical_id];
+    if (verdict === 'out') return 'kept-out';
+    if (verdict !== 'in') return 'vote';
+  }
   return 'enter';
 }
 
@@ -922,6 +932,105 @@ function zooRetry(root) {
   root.append(pill);
   Sound.boop();
   setTimeout(() => pill.remove(), 1500);
+}
+
+/** Trick badge vote: its stored look, a bouncing "?", and the two choices (the presenter decides). */
+function zooVoteOverlay(card) {
+  return el('div', { class: 'zoo-vote' },
+    el('div', { class: 'vote-card' }, cardCircle(card), el('div', { class: 'vote-question' }, '?')),
+    el('div', { class: 'vote-choices' },
+      el('div', { class: 'vote-yes' }, '👍 Let it in'),
+      el('div', { class: 'vote-no' }, '👎 Keep it out')));
+}
+
+/** Kept out: the gatekeeper goose waves the sticker bye-bye. */
+function zooGoose(root, card) {
+  root.querySelector('.zoo-goose')?.remove();
+  const overlay = el('div', { class: 'zoo-goose' },
+    el('div', { class: 'goose-row' },
+      el('div', { class: 'bye-sticker' }, cardArt(card, 24)),
+      el('div', { class: 'goose' }, '🪿', el('span', { class: 'goose-wave' }, '👋'))),
+    el('div', { class: 'goose-text' }, 'Bye-bye!'));
+  root.append(overlay);
+  Sound.honk();
+  setTimeout(() => overlay.remove(), 2600);
+}
+
+/**
+ * Tap rules shared by both zoo scenes. Hooks: root(), state(), enter(card), inside(card),
+ * tallyChanged(), party(), reset().
+ */
+function createZooFlow(h) {
+  let pending = null; // trick card waiting for the class vote
+  let deferred = []; // taps that arrived during the vote
+
+  function tap(ev) {
+    if (pending) {
+      if (ev.card) deferred.push(ev);
+      else zooRetry(h.root());
+      return;
+    }
+    const state = h.state();
+    const card = ev.card;
+    switch (zooDecide(state, card)) {
+      case 'unknown': return zooRetry(h.root());
+      case 'inside': return h.inside(card);
+      case 'kept-out': return zooGoose(h.root(), card);
+      case 'vote':
+        pending = card;
+        h.root().append(zooVoteOverlay(card));
+        Sound.wonder();
+        return;
+      default:
+        zooAdmit(state, card);
+        h.tallyChanged();
+        h.enter(card);
+    }
+  }
+
+  function decide(letIn) {
+    if (!pending) {
+      Badge.banner('Nothing is waiting');
+      return;
+    }
+    const card = pending;
+    pending = null;
+    h.root().querySelector('.zoo-vote')?.remove();
+    const state = h.state();
+    state.tricks[card.canonical_id] = letIn ? 'in' : 'out';
+    if (letIn) {
+      zooAdmit(state, card);
+      h.tallyChanged();
+      h.enter(card);
+    } else {
+      ZooStore.save(state);
+      zooGoose(h.root(), card);
+    }
+    const waiting = deferred;
+    deferred = [];
+    waiting.forEach(tap);
+  }
+
+  return {
+    tap,
+    clear() {
+      pending = null;
+      deferred = [];
+    },
+    command(action) {
+      if (action === 'let-in') decide(true);
+      else if (action === 'keep-out') decide(false);
+      else if (action === 'party') h.party();
+      else if (action === 'reset') {
+        pending = null;
+        deferred = [];
+        h.reset();
+      }
+    },
+    get pendingVote() {
+      return pending ? pending.canonical_id : null;
+    },
+  };
 }
 
 /** One path for every presenter command: keys and phone buttons both go through the server. */
@@ -1143,6 +1252,21 @@ Badge.registerScene((() => {
     node.classList.add('pop');
   }
 
+  const flow = createZooFlow({
+    root: () => root,
+    state: () => state,
+    enter: (card) => walkIn(card, insideCards().length - 1),
+    inside(card) {
+      Sound.tick(4);
+      bounce(slots.find((s) => s.dataset.id === card.canonical_id));
+      hint(`${card.emoji} is already inside!`);
+      hintTimer = Badge.later(idleHint, 2000);
+    },
+    tallyChanged: () => updateTally(true),
+    party: () => openGate(),
+    reset: () => Badge.show('gate'),
+  });
+
   return {
     id: 'gate',
     name: '🏰 Zoo Gate (2D backup)',
@@ -1150,6 +1274,7 @@ Badge.registerScene((() => {
     kid: true,
     onEnter(r) {
       root = r;
+      flow.clear();
       state = ZooStore.load();
       render();
       addEventListener('resize', layoutSlots);
@@ -1157,6 +1282,7 @@ Badge.registerScene((() => {
     onExit() {
       removeEventListener('resize', layoutSlots);
       generation++;
+      flow.clear();
     },
     onCards() {
       if (!state.open && !root.classList.contains('finale')) render();
@@ -1164,34 +1290,21 @@ Badge.registerScene((() => {
     onSkip: () => Commands.send('party'),
     skipLabel: '🎉 Start the party',
     actions: [{ label: '🔄 Reset the zoo', run: () => Commands.send('reset') }],
-    onCommand(action) {
-      if (action === 'party') openGate();
-      else if (action === 'reset') Badge.show('gate');
-    },
+    onCommand: (action) => flow.command(action),
     state: () => ({
       inside: insideCards().map((c) => c.canonical_id),
       tally: state.tally,
       finale: state.open,
+      pendingVote: flow.pendingVote,
     }),
     onTap(ev) {
-      if (zooDecide(state, ev.card) === 'unknown') return zooRetry(root);
-      const card = ev.card;
-      if (state.open) {
+      if (state.open && ev.card) {
         Sound.chime();
-        Confetti.burst([card.color.hex]);
-        bounce(root.querySelector(`.finale-animals [data-id="${card.canonical_id}"]`));
+        Confetti.burst([ev.card.color.hex]);
+        bounce(root.querySelector(`.finale-animals [data-id="${ev.card.canonical_id}"]`));
         return;
       }
-      if (state.checkedIn.includes(card.canonical_id)) {
-        Sound.tick(4);
-        bounce(slots.find((s) => s.dataset.id === card.canonical_id));
-        hint(`${card.emoji} is already inside!`);
-        hintTimer = Badge.later(idleHint, 2000);
-        return;
-      }
-      zooAdmit(state, card);
-      walkIn(card, insideCards().length - 1);
-      updateTally(true);
+      flow.tap(ev);
     },
   };
 })());
@@ -1936,6 +2049,25 @@ Badge.registerScene((() => {
     }
   }
 
+  const flow = createZooFlow({
+    root: () => root,
+    state: () => state,
+    enter(card) {
+      if (!w) return;
+      queue.push(card);
+      drain();
+    },
+    inside(card) {
+      const a = animals.get(card.canonical_id);
+      if (a) a.bounceAt = performance.now();
+      Sound.tick(4);
+      if (finale) Confetti.burst([card.color.hex]);
+    },
+    tallyChanged: () => updateHud(true),
+    party: () => startParty(),
+    reset: () => Badge.show('zoo'),
+  });
+
   return {
     id: 'zoo',
     name: '🎠 Zoo playground (3D)',
@@ -1944,6 +2076,7 @@ Badge.registerScene((() => {
     skipLabel: '🎉 Start the party',
     onEnter(r) {
       root = r;
+      flow.clear();
       root.className = 'scene scene-zoo3d';
       state = ZooStore.load();
       finale = state.open;
@@ -1961,35 +2094,20 @@ Badge.registerScene((() => {
       if (finale) showFinale(false);
       w.raf = requestAnimationFrame(frame);
     },
-    onExit: teardown,
+    onExit() {
+      flow.clear();
+      teardown();
+    },
     onCards() {
       updateHud();
       if (w) syncAnimals();
     },
     onSkip: () => Commands.send('party'),
     actions: [{ label: '🔄 Reset the zoo', run: () => Commands.send('reset') }],
-    onCommand(action) {
-      if (action === 'party') startParty();
-      else if (action === 'reset') Badge.show('zoo');
-    },
-    onTap(ev) {
-      const decision = zooDecide(state, ev.card);
-      if (decision === 'unknown') return zooRetry(root);
-      const card = ev.card;
-      const a = animals.get(card.canonical_id);
-      if (decision === 'inside') {
-        if (a) a.bounceAt = performance.now();
-        Sound.tick(4);
-        if (finale) Confetti.burst([card.color.hex]);
-        return;
-      }
-      zooAdmit(state, card);
-      updateHud(true);
-      if (!w) return;
-      queue.push(card);
-      drain();
-    },
+    onCommand: (action) => flow.command(action),
+    onTap: (ev) => flow.tap(ev),
     state: () => ({
+      pendingVote: flow.pendingVote,
       inside: [...animals.values()].filter((a) => a.arrived).map((a) => a.card.canonical_id),
       queued: queue.length,
       finale,
