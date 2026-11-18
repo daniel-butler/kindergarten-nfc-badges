@@ -1763,10 +1763,19 @@ Badge.registerScene((() => {
 
   function spriteOf(tex, h = ANIMAL_H) {
     const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false }));
-    const fit = () => s.scale.set(h * (tex.aspect || 1), h, 1);
+    retexture(s, tex, h);
+    return s;
+  }
+
+  /** Shows `tex` on a sprite, sized to its shape once it has loaded. */
+  function retexture(s, tex, h = ANIMAL_H) {
+    s.material.map = tex;
+    s.material.needsUpdate = true;
+    const fit = () => {
+      if (s.material.map === tex) s.scale.set(h * (tex.aspect || 1), h, 1);
+    };
     fit();
     tex.ready?.then(fit);
-    return s;
   }
 
   const emojiSprite = (emoji, h) => spriteOf(cardTexture({ emoji }), h);
@@ -2139,10 +2148,14 @@ Badge.registerScene((() => {
     for (const card of want) {
       const a = animals.get(card.canonical_id);
       if (!a) addAnimal(card, true);
-      else if ((card.image || '') !== a.imageKey) {
-        removeAnimal(card.canonical_id);
-        Object.assign(addAnimal(card, a.arrived), { station: a.station, slot: a.slot, visitAt: a.visitAt });
-      } else a.card = card;
+      else {
+        // A new photo: same animal, new picture, so one that's mid-walk keeps walking.
+        if ((card.image || '') !== a.imageKey) {
+          retexture(a.sprite, cardTexture(card));
+          a.imageKey = card.image || '';
+        }
+        a.card = card;
+      }
     }
     assignStations();
   }
@@ -2648,6 +2661,7 @@ Badge.registerScene((() => {
       finale,
       tally: state.tally,
       sprites: w ? w.scene.children.filter((o) => o.userData.animal).length : 0,
+      heights: Object.fromEntries([...animals.values()].map((a) => [a.card.canonical_id, a.sprite.position.y])),
     }),
   };
 })());
