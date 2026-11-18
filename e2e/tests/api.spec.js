@@ -1,5 +1,5 @@
 const { test, expect } = require('@playwright/test');
-const { PENGUIN, LION, setCards, getCards, phoneTap, setLinkMode } = require('./helpers');
+const { PENGUIN, LION, setCards, getCards, phoneTap, setLinkMode, uploadImage, PNG_1PX } = require('./helpers');
 
 test.beforeEach(async ({ request }) => {
   await setLinkMode(request, false);
@@ -81,4 +81,58 @@ test('SSE delivers tap and cards events', async ({ page, request }) => {
   expect(got[0]).toMatchObject({ type: 'tap', data: { canonical_id: 'C3B2A104', card: { label: 'Penguin' } } });
   expect(got[1].type).toBe('cards');
   expect(got[1].data).toHaveLength(1);
+});
+
+test('upsert one card and resolve it in reader form', async ({ request }) => {
+  const owl = { canonical_id: '04:11:22:33:44:55:66', emoji: '🦉', label: 'Owl', color: { hex: '#8D6E63', name: 'Brown' } };
+  const res = await request.post('/api/cards', { data: owl });
+  expect(res.status(), await res.text()).toBe(200);
+  expect((await res.json()).canonical_id).toBe('04112233445566');
+  expect(await getCards(request)).toHaveLength(3);
+
+  const resolved = await (await request.get('/api/cards/resolve?id=66554433')).json();
+  expect(resolved).toMatchObject({ canonical_id: '66554433', card: { label: 'Owl' } });
+  const unknown = await (await request.get('/api/cards/resolve?id=DEADBEEF')).json();
+  expect(unknown).toEqual({ canonical_id: 'DEADBEEF', card: null });
+  expect((await request.get('/api/cards/resolve?id=zebra')).status()).toBe(400);
+
+  const dup = await request.post('/api/cards', { data: { ...owl, canonical_id: 'F6E5D4C3B2A104' } });
+  expect(dup.status()).toBe(409);
+});
+
+test('image upload is stored, served, and versioned', async ({ request }) => {
+  const res = await uploadImage(request, PENGUIN.canonical_id);
+  expect(res.status(), await res.text()).toBe(200);
+  const card = await res.json();
+  expect(card.image).toMatch(/^\/images\/04A1B2C3D4E5F6\.png\?v=\d+$/);
+  const img = await request.get(card.image);
+  expect(img.status()).toBe(200);
+  expect(img.headers()['content-type']).toBe('image/png');
+  expect(Buffer.compare(await img.body(), PNG_1PX)).toBe(0);
+  expect((await getCards(request)).find((c) => c.canonical_id === PENGUIN.canonical_id).image).toBe(card.image);
+});
+
+test('image upload rejects unknown id, non-png, and oversized', async ({ request }) => {
+  expect((await uploadImage(request, '04999999999999')).status()).toBe(404);
+  expect((await uploadImage(request, PENGUIN.canonical_id, Buffer.from('hello'), 'image/jpeg')).status()).toBe(415);
+  const big = Buffer.concat([PNG_1PX, Buffer.alloc(5 * 1024 * 1024 + 2048)]);
+  expect((await uploadImage(request, PENGUIN.canonical_id, big)).status()).toBe(413);
+  expect((await getCards(request)).every((c) => !c.image)).toBe(true);
+});
+
+test('images route refuses path tricks', async ({ request }) => {
+  for (const path of ['/images/..%2Fcards.json', '/images/cards.json', '/images/04a1b2c3d4e5f6.png', '/images/.png']) {
+    expect((await request.get(path)).status(), path).toBe(404);
+  }
+});
+
+test('away card tapped clears away; clear-away resets all', async ({ request }) => {
+  await setCards(request, [{ ...PENGUIN, away: true }, { ...LION, away: true }]);
+  const ev = await phoneTap(request, PENGUIN.canonical_id);
+  expect(ev.card.away).toBe(false);
+  const cards = await getCards(request);
+  expect(cards.find((c) => c.label === 'Penguin').away).toBe(false);
+  expect(cards.find((c) => c.label === 'Lion').away).toBe(true);
+  const cleared = await (await request.post('/api/cards/clear-away')).json();
+  expect(cleared.every((c) => c.away === false)).toBe(true);
 });

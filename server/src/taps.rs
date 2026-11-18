@@ -25,6 +25,15 @@ pub struct TapEvent {
     pub linked: bool,
 }
 
+/// What a tap did: the card it resolved to, whether it just linked an alias, and whether
+/// the registry changed (a link or clearing "not here today"), so listeners need new cards.
+#[derive(Debug)]
+pub struct TapOutcome {
+    pub card: Option<Card>,
+    pub linked: bool,
+    pub cards_changed: bool,
+}
+
 struct RecentKnownTap {
     card_id: String,
     source: Source,
@@ -52,6 +61,32 @@ impl Linker {
     /// Resolve a canonical ID, linking it if link mode allows. Returns the card and
     /// whether a link was made.
     pub fn handle(
+        &mut self,
+        registry: &mut Registry,
+        canonical_id: &str,
+        source: Source,
+        now: Instant,
+    ) -> TapOutcome {
+        let (mut card, linked) = self.resolve_and_link(registry, canonical_id, source, now);
+        let mut cards_changed = linked;
+        if let Some(c) = card.as_mut().filter(|c| c.away) {
+            c.away = false;
+            match registry.upsert(c.clone()) {
+                Ok(saved) => {
+                    *c = saved;
+                    cards_changed = true;
+                }
+                Err(e) => eprintln!("could not clear away: {e}"),
+            }
+        }
+        TapOutcome {
+            card,
+            linked,
+            cards_changed,
+        }
+    }
+
+    fn resolve_and_link(
         &mut self,
         registry: &mut Registry,
         canonical_id: &str,
@@ -105,6 +140,8 @@ mod tests {
                 name: "Blue".into(),
             },
             trick: false,
+            image: None,
+            away: false,
         }])
         .unwrap();
         reg
@@ -122,7 +159,7 @@ mod tests {
         let mut l = linker();
         let t0 = Instant::now();
         l.handle(&mut reg, "04A1B2C3D4E5F6", Source::Phone, t0);
-        let (card, linked) = l.handle(
+        let TapOutcome { card, linked, .. } = l.handle(
             &mut reg,
             "99887766",
             Source::Reader,
@@ -140,12 +177,12 @@ mod tests {
         let mut reg = registry("disabled");
         let mut l = Linker::default();
         l.handle(&mut reg, "04A1B2C3D4E5F6", Source::Phone, t0);
-        assert!(!l.handle(&mut reg, "99887766", Source::Reader, t0).1);
+        assert!(!l.handle(&mut reg, "99887766", Source::Reader, t0).linked);
 
         let mut reg = registry("same");
         let mut l = linker();
         l.handle(&mut reg, "04A1B2C3D4E5F6", Source::Phone, t0);
-        assert!(!l.handle(&mut reg, "99887766", Source::Phone, t0).1);
+        assert!(!l.handle(&mut reg, "99887766", Source::Phone, t0).linked);
 
         let mut reg = registry("late");
         let mut l = linker();
@@ -157,7 +194,7 @@ mod tests {
                 Source::Reader,
                 t0 + Duration::from_secs(6)
             )
-            .1
+            .linked
         );
         assert!(reg.resolve("99887766").is_none());
     }
@@ -166,8 +203,24 @@ mod tests {
     fn heuristic_match_needs_no_link() {
         let mut reg = registry("heuristic");
         let mut l = linker();
-        let (card, linked) = l.handle(&mut reg, "C3B2A104", Source::Reader, Instant::now());
+        let TapOutcome { card, linked, .. } =
+            l.handle(&mut reg, "C3B2A104", Source::Reader, Instant::now());
         assert_eq!(card.unwrap().emoji, "🐧");
         assert!(!linked);
+    }
+
+    #[test]
+    fn tap_on_away_card_clears_it() {
+        let mut reg = registry("away");
+        let mut card = reg.cards()[0].clone();
+        card.away = true;
+        reg.upsert(card).unwrap();
+        let mut l = Linker::default();
+        let TapOutcome { card, .. } =
+            l.handle(&mut reg, "04A1B2C3D4E5F6", Source::Reader, Instant::now());
+        assert!(!card.unwrap().away);
+        assert!(!reg.cards()[0].away);
+        let reloaded = Registry::load(reg.path().to_path_buf()).unwrap();
+        assert!(!reloaded.cards()[0].away);
     }
 }

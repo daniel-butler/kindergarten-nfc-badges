@@ -12,6 +12,13 @@ function manyCards(n) {
   });
 }
 
+/** A real 1×1 PNG. */
+const PNG_1PX = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', 'base64');
+
+async function uploadImage(request, id, body = PNG_1PX, contentType = 'image/png') {
+  return request.put(`/api/cards/${id}/image`, { data: body, headers: { 'content-type': contentType } });
+}
+
 const spoken = (page) => page.evaluate(() => window.Badge.voice.history);
 
 async function setCards(request, cards) {
@@ -68,4 +75,4 @@ const scene = (page) => page.locator('#scene');
 /** Debug-log rows for real taps (not notes). */
 const tapRows = (page, source) => scene(page).locator('tr', { hasText: source === 'phone' ? '📱 phone' : '⌨️ reader' });
 
-module.exports = { reloadPage, PENGUIN, LION, FOX_TRICK, manyCards, spoken, setCards, getCards, phoneTap, setLinkMode, openScene, readerScan, humanType, scene, tapRows };
+module.exports = { PNG_1PX, uploadImage, reloadPage, PENGUIN, LION, FOX_TRICK, manyCards, spoken, setCards, getCards, phoneTap, setLinkMode, openScene, readerScan, humanType, scene, tapRows };
