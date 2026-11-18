@@ -38,11 +38,12 @@ jobs:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
-      - name: TapClient checks
+      - name: TapClient and sticker-edge checks
         working-directory: ios
         run: |
-          swiftc ClassroomZoo/TapClient.swift Tests/main.swift -o "$RUNNER_TEMP/tapcheck"
+          swiftc ClassroomZoo/TapClient.swift ClassroomZoo/StickerEdges.swift Tests/*.swift -o "$RUNNER_TEMP/tapcheck"
           "$RUNNER_TEMP/tapcheck"
+          swiftc -O Tools/clean-sticker/main.swift ClassroomZoo/StickerEdges.swift -o "$RUNNER_TEMP/clean-sticker"
       - name: Build app (simulator, unsigned)
         working-directory: ios
         run: |

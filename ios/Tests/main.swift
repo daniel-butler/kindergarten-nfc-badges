@@ -1,5 +1,5 @@
 // Mac-side checks for TapClient (no phone needed):
-//   swiftc ClassroomZoo/TapClient.swift Tests/main.swift -o /tmp/tapcheck && /tmp/tapcheck
+//   swiftc ClassroomZoo/TapClient.swift ClassroomZoo/StickerEdges.swift Tests/*.swift -o /tmp/tapcheck && /tmp/tapcheck
 // With BADGE_SERVER=http://localhost:8080 set, it also POSTs a real tap to a running server.
 import Foundation
 
@@ -10,6 +10,8 @@ func check(_ condition: Bool, _ message: String) {
         print("FAIL: \(message)")
     }
 }
+
+runStickerEdgesChecks()
 
 check(TapClient.hexID(Data([0x04, 0xA1, 0xB2, 0xC3, 0xD4, 0xE5, 0xF6])) == "04A1B2C3D4E5F6", "hexID is uppercase, unseparated")
 check(TapClient.hexID(Data([0x00, 0x0F])) == "000F", "hexID keeps leading zeros")

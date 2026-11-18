@@ -59,6 +59,12 @@ The projector page uses `http://localhost:8080/` on the Mac, so it works even wi
    animals leave the count, the party, and Who has the ___?. Tapping that badge later checks
    it in as normal.
 
+After the photo, Zoo Tap tidies the cutout: leftover bits of the sticker's old white border
+are removed and an even white die-cut border is drawn around the drawing's dark outline. A
+sticker with no dark outline is kept as the plain cutout. To try the same steps on a Mac:
+`swiftc -O ios/Tools/clean-sticker/main.swift ios/ClassroomZoo/StickerEdges.swift -o /tmp/clean-sticker`
+then `/tmp/clean-sticker photo.png sticker.png`.
+
 Trick badges: photograph a *different* (spare) sticker and/or pick a different color, then flip
 🎭 so it doesn't count toward "everyone's home".
 
@@ -67,7 +73,7 @@ code on the Mac:
 
 ```sh
 cd ios
-swiftc ClassroomZoo/TapClient.swift Tests/main.swift -o /tmp/tapcheck && /tmp/tapcheck
+swiftc ClassroomZoo/TapClient.swift ClassroomZoo/StickerEdges.swift Tests/*.swift -o /tmp/tapcheck && /tmp/tapcheck
 BADGE_SERVER=localhost:8080 /tmp/tapcheck      # also sends a real tap to a running server
 ```
 

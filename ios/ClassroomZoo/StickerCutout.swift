@@ -2,7 +2,8 @@ import CoreImage
 import UIKit
 import Vision
 
-/// Lifts the sticker off the cardstock (like long-pressing a photo to lift its subject).
+/// Lifts the sticker off the cardstock (like long-pressing a photo to lift its subject),
+/// then tidies its edges with `StickerEdges`.
 enum StickerCutout {
     static let maxSide: CGFloat = 600
 
@@ -26,7 +27,12 @@ enum StickerCutout {
             guard let out = CIContext().createCGImage(ci, from: ci.extent) else {
                 return (centerSquare(upright), false)
             }
-            return (scaledToFit(UIImage(cgImage: out)), true)
+            let lifted = scaledToFit(UIImage(cgImage: out))
+            // Tidy the edges; if the sticker has no dark outline, keep Vision's cutout as is.
+            if let cg = lifted.cgImage, let cleaned = StickerEdges.clean(cg) {
+                return (UIImage(cgImage: cleaned), true)
+            }
+            return (lifted, true)
         } catch {
             return (centerSquare(upright), false)
         }
