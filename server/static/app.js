@@ -1630,6 +1630,7 @@ Badge.registerScene((() => {
   // ---------- animals ----------
   function addAnimal(card, arrived) {
     const sprite = spriteOf(cardTexture(card));
+    sprite.userData.animal = card.canonical_id;
     const shadow = blob(2);
     w.scene.add(sprite, shadow);
     const a = { card, sprite, shadow, arrived, station: null, slot: 0, bounceAt: 0, imageKey: card.image || '' };
@@ -1658,9 +1659,11 @@ Badge.registerScene((() => {
   }
 
   function syncAnimals() {
-    const want = state.checkedIn.map(cardById).filter((c) => c && !c.away);
+    // Kids still waiting at the gate get their sticker when their turn comes, not here.
+    const waiting = new Set(queue.map((c) => c.canonical_id));
+    const want = state.checkedIn.map(cardById).filter((c) => c && !c.away && !waiting.has(c.canonical_id));
     const ids = new Set(want.map((c) => c.canonical_id));
-    for (const id of [...animals.keys()]) if (!ids.has(id)) removeAnimal(id);
+    for (const id of [...animals.keys()]) if (!ids.has(id) && !waiting.has(id)) removeAnimal(id);
     for (const card of want) {
       const a = animals.get(card.canonical_id);
       if (!a) addAnimal(card, true);
@@ -1694,6 +1697,7 @@ Badge.registerScene((() => {
   async function arrive(card) {
     const gen = generation;
     const fast = queue.length > 0;
+    removeAnimal(card.canonical_id);
     const a = addAnimal(card, false);
     a.sprite.position.set(0, ANIMAL_H / 2, OUTSIDE_Z);
     w.cam.follow = null;
@@ -1921,6 +1925,7 @@ Badge.registerScene((() => {
       inside: [...animals.values()].filter((a) => a.arrived).map((a) => a.card.canonical_id),
       queued: queue.length,
       finale,
+      sprites: w ? w.scene.children.filter((o) => o.userData.animal).length : 0,
     }),
   };
 })());

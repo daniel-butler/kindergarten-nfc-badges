@@ -38,6 +38,18 @@ test('five quick taps all arrive', async ({ page, request }) => {
   await expect.poll(async () => (await inside(page)).length, { timeout: 25000 }).toBe(5);
 });
 
+test('a not-here-today kid tapping during a rush leaves exactly one sticker per animal', async ({ page, request }) => {
+  const cards = manyCards(3);
+  await setCards(request, [...cards, OWL_AWAY]);
+  await openScene(page, 'zoo', 4);
+  for (const c of cards) await phoneTap(request, c.canonical_id);
+  await phoneTap(request, OWL_AWAY.canonical_id); // clears away → cards event mid-queue
+  await expect(counter(page)).toHaveText('4 of 4 animals are home');
+  await expect.poll(async () => (await inside(page)).length, { timeout: 30000 }).toBe(4);
+  await page.waitForTimeout(500);
+  expect((await zooState(page)).sprites).toBe(4);
+});
+
 test('unknown badge shows ACCESS DENIED and nobody goes in', async ({ page, request }) => {
   await openScene(page, 'zoo', 4);
   await phoneTap(request, 'DEADBEEF');
