@@ -215,6 +215,14 @@ The two scenes share the same stored check-ins.
 - "Not here today" is stored on the server card (survives restarts), cleared by tapping that
   badge or by **Everyone's here**; away cards skipped by Who has, faded in The List.
 
+## Later phase: clean sticker edges in the app
+
+Phone cutouts will arrive with ragged edges and leftover bits of the sticker's white border (the
+puppy icon source is a real example). After the Vision lift, Zoo Tap should clean them the way
+`ios/Tools/clean-sticker.swift` does for the icon: drop everything white or transparent that is
+reachable from outside without crossing the drawing's dark outline, keep the largest piece, then
+draw an even white die-cut border. Run it before upload so every scene gets clean stickers.
+
 ## Open (to discuss after this ships)
 
 - The ACCESS DENIED case: the presenter wants to talk it through. Until then it behaves as

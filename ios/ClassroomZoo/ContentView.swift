@@ -14,8 +14,15 @@ struct ContentView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 24) {
-                Text("🦁 Zoo Tap")
-                    .font(.largeTitle.bold())
+                HStack(spacing: 12) {
+                    Image("Puppy")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(height: 64)
+                        .accessibilityHidden(true)
+                    Text("Zoo Tap")
+                        .font(.largeTitle.bold())
+                }
 
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Server URL")

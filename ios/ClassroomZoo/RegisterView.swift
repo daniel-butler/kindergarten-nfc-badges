@@ -30,10 +30,12 @@ struct RegisterView: View {
         VStack(spacing: 18) {
             switch step {
             case .idle:
+                Image("Puppy").resizable().scaledToFit().frame(height: 160).accessibilityHidden(true)
                 bigButton("📛 Scan a badge to register", tint: .blue, action: scan)
                 Text("Hold the badge to the top of the iPhone. Then snap its sticker.")
                     .font(.footnote).foregroundStyle(.secondary).multilineTextAlignment(.center)
             case .looking, .saving:
+                Image("Puppy").resizable().scaledToFit().frame(height: 120).accessibilityHidden(true)
                 ProgressView().controlSize(.large)
             case .existing(let card):
                 existingView(card)
