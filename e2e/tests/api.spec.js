@@ -186,3 +186,26 @@ test('reset denies the special again and clears presenter state', async ({ reque
 test('unknown command is rejected', async ({ request }) => {
   expect((await command(request, 'nope')).status()).toBe(400);
 });
+
+test('a tap says when a trick or special badge is waiting; a trick that was let in stops waiting', async ({ request }) => {
+  await setCards(request, [PENGUIN, FOX_TRICK, STAR_SPECIAL]);
+  await command(request, 'reset');
+  expect((await phoneTap(request, PENGUIN.canonical_id)).waiting).toBeUndefined();
+  expect((await phoneTap(request, STAR_SPECIAL.canonical_id)).waiting).toBe('special');
+  expect((await phoneTap(request, FOX_TRICK.canonical_id)).waiting).toBe('trick');
+  await command(request, 'keep-out');
+  expect((await phoneTap(request, FOX_TRICK.canonical_id)).waiting).toBe('trick'); // kept out isn't final
+  await command(request, 'let-in');
+  expect((await phoneTap(request, FOX_TRICK.canonical_id)).waiting).toBeUndefined(); // it's inside
+});
+
+test('a command can name the badge it is for, and the page hears which', async ({ page, request }) => {
+  await page.goto('/#debug');
+  await page.evaluate(() => {
+    window.__commands = [];
+    new EventSource('/events').addEventListener('command', (e) => window.__commands.push(JSON.parse(e.data)));
+  });
+  await page.waitForTimeout(500);
+  await request.post('/api/command', { data: { action: 'let-in', card: '04:ca:fe:f0:0d:be:ef' } });
+  await expect.poll(() => page.evaluate(() => window.__commands)).toContainEqual({ action: 'let-in', card: '04CAFEF00DBEEF' });
+});

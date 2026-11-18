@@ -156,3 +156,19 @@ test('reopening the app with the Mac unreachable: it says so, and Reconnect gets
 test("the app's log can be read, copied and shared on the phone", async () => {
   await phone('testLogsCanBeCopied');
 });
+
+test('scanning a trick badge on Check in: Let in right there, and it walks into the zoo', async ({ page }) => {
+  await openScene(page, 'zoo', 3);
+  await phone('testCheckInDecidesTrick', { tags: [FOX_TRICK.canonical_id], expect: 'Fox' });
+  await expect(tally(page, 1)).toBeVisible({ timeout: 10000 });
+  await expect.poll(() => inside(page), { timeout: 20000 }).toContain(FOX_TRICK.canonical_id);
+});
+
+test('scanning the special badge on Check in: Allow right there, and its next tap starts the party', async ({ page, request }) => {
+  await openScene(page, 'zoo', 3);
+  await phone('testCheckInAllowsSpecial', { tags: [STAR_SPECIAL.canonical_id], expect: 'Star' });
+  await expect(page.locator(`.zoo-list-new[data-id="${STAR_SPECIAL.canonical_id}"]`)).toBeVisible({ timeout: 20000 });
+  await page.waitForTimeout(1600);
+  await phoneTap(request, STAR_SPECIAL.canonical_id);
+  await expect(page.locator('.zoo3d-finale')).toContainText('Congratulations, Official Zookeepers!', { timeout: 20000 });
+});

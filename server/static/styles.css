@@ -766,6 +766,18 @@ body.kid-mode .scene-who.nope .title, body.kid-mode .scene-who.nope .big-label {
 .zoo-list-item .sticker { height: 13vmin; }
 .zoo-list-item .emoji-art { font-size: 10vmin; }
 .zoo-list-empty { font-family: var(--emoji); font-size: 10vmin; opacity: 0.3; }
+.zoo-list-mark {
+  position: absolute; right: -1vmin; bottom: -1vmin;
+  font-family: var(--emoji); font-size: 5.5vmin; line-height: 1;
+  filter: drop-shadow(0 0.3vmin 0 #fff);
+}
+.zoo-list-mark.empty-box {
+  width: 5.2vmin; height: 5.2vmin; right: -0.8vmin; bottom: -0.8vmin;
+  border: 0.7vmin solid var(--ink); border-radius: 1vmin; background: #fff;
+}
+.zoo-list-item.status-unlisted .sticker, .zoo-list-item.status-unlisted .emoji-art { opacity: 0.45; filter: grayscale(0.7); }
+.zoo-list-item.status-away .sticker, .zoo-list-item.status-away .emoji-art { opacity: 0.3; }
+.zoo-list-new .zoo-list-mark { animation: list-appear 0.5s ease-out 1.8s both; }
 .zoo-list-new { width: 18vmin; height: 18vmin; }
 .zoo-list-new .sticker, .zoo-list-new .emoji-art { animation: list-appear 0.5s ease-out 1.3s both; }
 .zoo-list-new .sticker { height: 16vmin; }
