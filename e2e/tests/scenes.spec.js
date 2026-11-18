@@ -143,8 +143,23 @@ test.describe('Debug and presenter panel', () => {
     await page.waitForTimeout(1600);
     await phoneTap(request, FOX_TRICK.canonical_id);
     await expect(page.locator('.zoo-vote')).toBeVisible();
+    await page.waitForTimeout(1100); // the class votes
     await panel.locator('button', { hasText: '👍 Let it in' }).click();
     await expect(page.locator('.zoo-tally[data-count="1"]')).toBeVisible();
+  });
+
+  test("the panel's Reset needs a second click", async ({ page, request }) => {
+    await setCards(request, [PENGUIN, LION]);
+    await command(request, 'reset');
+    await openScene(page, 'zoo', 2);
+    await phoneTap(request, PENGUIN.canonical_id);
+    await expect(page.locator('.zoo-tally[data-count="1"]')).toBeVisible();
+    await page.keyboard.press('Alt+p');
+    await page.locator('#panel button', { hasText: 'Reset the zoo' }).click();
+    await page.waitForTimeout(500);
+    await expect(page.locator('.zoo-tally[data-count="1"]')).toBeVisible();
+    await page.locator('#panel button', { hasText: 'Click again to reset' }).click();
+    await expect(page.locator('.zoo-tally[data-count="0"]')).toBeVisible();
   });
 
   test('panel lists scenes and switches between them', async ({ page }) => {

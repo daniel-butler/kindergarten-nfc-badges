@@ -546,7 +546,7 @@ const Panel = (() => {
       button('👍 Let it in', '⌥Y', () => Commands.send('let-in')),
       button('👎 Keep it out', '⌥N', () => Commands.send('keep-out')),
       button('⭐ Allow special', '⌥A', () => Commands.send('allow-special')),
-      button('🔄 Reset the zoo', '⌥R ⌥R', () => Commands.send('reset')),
+      button(performance.now() < resetArmedUntil ? '⚠️ Click again to reset' : '🔄 Reset the zoo', '⌥R ⌥R', requestReset),
       el('h2', {}, 'Status'),
       el('div', {}, `${Badge.connected ? '🟢 Connected' : '🔴 Disconnected'} · ${Badge.cards.length} cards`),
       Badge.lastUnknown ? el('div', { class: 'mono' }, `Last unknown: ${Badge.lastUnknown}`) : null,
@@ -555,6 +555,21 @@ const Panel = (() => {
   }
 
   let resetArmedUntil = 0;
+
+  /** Reset needs a second press (key or panel click) within 3 s. */
+  function requestReset() {
+    if (performance.now() < resetArmedUntil) {
+      resetArmedUntil = 0;
+      Badge.banner(null);
+      Commands.send('reset');
+    } else {
+      resetArmedUntil = performance.now() + 3000;
+      Badge.banner('Press ⌥R again to reset the zoo', { ms: 3000 });
+      setTimeout(render, 3050);
+    }
+    render();
+  }
+
   document.addEventListener('keydown', (e) => {
     if (!e.altKey || e.ctrlKey || e.metaKey) return;
     const code = e.code;
@@ -569,16 +584,7 @@ const Panel = (() => {
     else if (code === 'KeyY') Commands.send('let-in');
     else if (code === 'KeyN') Commands.send('keep-out');
     else if (code === 'KeyA') Commands.send('allow-special');
-    else if (code === 'KeyR') {
-      if (performance.now() < resetArmedUntil) {
-        resetArmedUntil = 0;
-        Badge.banner(null);
-        Commands.send('reset');
-      } else {
-        resetArmedUntil = performance.now() + 3000;
-        Badge.banner('Press ⌥R again to reset the zoo', { ms: 3000 });
-      }
-    }
+    else if (code === 'KeyR') requestReset();
     else if (code === 'KeyM') Sound.muted = !Sound.muted;
     else if (code === 'KeyT') Reader.toggleTestMode();
     else handled = false;
@@ -1013,7 +1019,9 @@ function zooListOverlay(state, scribble) {
  * tallyChanged(), party(), reset().
  */
 function createZooFlow(h) {
+  const VOTE_MIN_MS = 1000; // a vote must be on screen this long before a decision counts
   let pending = null; // trick card waiting for the class vote
+  let pendingSince = 0;
   let deferred = []; // taps that arrived during the vote
 
   function showList(scribble) {
@@ -1042,6 +1050,7 @@ function createZooFlow(h) {
       case 'special-denied': return zooSpecialDenied(h.root(), card);
       case 'vote':
         pending = card;
+        pendingSince = performance.now();
         h.root().append(zooVoteOverlay(card));
         Sound.wonder();
         return;
@@ -1057,6 +1066,8 @@ function createZooFlow(h) {
       Badge.banner('Nothing is waiting');
       return;
     }
+    // A double press would otherwise decide the next trick badge before the class sees it.
+    if (performance.now() - pendingSince < VOTE_MIN_MS) return;
     const card = pending;
     pending = null;
     h.root().querySelector('.zoo-vote')?.remove();
@@ -1077,9 +1088,18 @@ function createZooFlow(h) {
 
   return {
     tap,
+    /** Scene is closing: kids who tapped during a vote still get in (no animation). */
     clear() {
+      const state = h.state();
+      for (const ev of deferred) {
+        if (state && zooDecide(state, ev.card) === 'enter') zooAdmit(state, ev.card);
+      }
       pending = null;
       deferred = [];
+    },
+    /** The scene redrew itself: put the vote card back if a vote is still open. */
+    restore() {
+      if (pending && !h.root().querySelector('.zoo-vote')) h.root().append(zooVoteOverlay(pending));
     },
     command(action) {
       if (action === 'let-in') decide(true);
@@ -1357,7 +1377,10 @@ Badge.registerScene((() => {
       flow.clear();
     },
     onCards() {
-      if (!state.open && !root.classList.contains('finale')) render();
+      if (!state.open && !root.classList.contains('finale')) {
+        render();
+        flow.restore();
+      }
     },
     onSkip: () => Commands.send('party'),
     skipLabel: '🎉 Start the party',

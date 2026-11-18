@@ -31,9 +31,24 @@ test.describe('Zoo Gate (backup, ⌥6)', () => {
     await openScene(page, 'gate', 3);
     await phoneTap(request, FOX_TRICK.canonical_id);
     await expect(page.locator('.zoo-vote')).toBeVisible();
+    await page.waitForTimeout(1100); // the class votes
     await page.keyboard.press('Alt+y');
     await expect(tally(page, 1)).toBeVisible();
     await expect(slot(page, FOX_TRICK)).toBeVisible({ timeout: 5000 });
+  });
+
+  test('the vote card survives a card-list update in the backup', async ({ page, request }) => {
+    const OWL_AWAY = { canonical_id: '04BEEFBEEFBEEF', emoji: '🦉', label: 'Owl', color: { hex: '#8D6E63', name: 'Brown' }, away: true };
+    await setCards(request, [PENGUIN, FOX_TRICK, OWL_AWAY]);
+    await openScene(page, 'gate', 3);
+    await phoneTap(request, FOX_TRICK.canonical_id);
+    await expect(page.locator('.zoo-vote')).toBeVisible();
+    await phoneTap(request, OWL_AWAY.canonical_id); // clears away on the server → cards event
+    await page.waitForTimeout(1100);
+    await expect(page.locator('.zoo-vote')).toBeVisible();
+    await page.waitForTimeout(1100); // the class votes
+    await page.keyboard.press('Alt+y');
+    await expect(tally(page, 2)).toBeVisible();
   });
 
   test('the special badge finale works in the backup too', async ({ page, request }) => {
