@@ -21,7 +21,7 @@ struct PresenterView: View {
     var body: some View {
         VStack(spacing: 16) {
             HStack(spacing: 12) {
-                Image("Bee").resizable().scaledToFit().frame(height: 52).accessibilityHidden(true)
+                Image("Budgie").resizable().scaledToFit().frame(height: 52).accessibilityHidden(true)
                 Text("Presenter").font(.title.bold())
                 Spacer()
                 Button {
