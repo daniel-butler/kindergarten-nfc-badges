@@ -75,6 +75,46 @@ func runStickerEdgesChecks() {
         check(false, "clean() refused a tightly cropped sticker")
     }
 
+    // A photographed sticker: paper margin outside the outline, then the sheet's grey cut line,
+    // then more paper. Everything outside the drawing's outline goes, cut line included.
+    let cutLine = makeImage { x, y in
+        let d = hypot(Double(x - 100), Double(y - 100))
+        if d < 60 { return (230, 190, 130, 255) }   // tan body
+        if d <= 64 { return (20, 20, 20, 255) }     // dark outline
+        if d <= 76 { return (245, 245, 240, 255) }  // paper margin
+        if d <= 79 { return (175, 172, 165, 255) }  // grey cut line / shadow
+        if d <= 84 { return (250, 250, 250, 255) }  // paper beyond it
+        return (0, 0, 0, 0)
+    }
+    if let c = StickerEdges.clean(cutLine) {
+        let cp = pixels(c)
+        func alpha(_ x: Int, _ y: Int) -> UInt8 { cp[((y + pad) * c.width + x + pad) * 4 + 3] }
+        check(alpha(100 + 64 + border + 2, 100) == 0, "paper margin beyond the new border is gone")
+        check(alpha(100 + 77, 100) == 0, "the sheet's grey cut line is gone")
+    } else {
+        check(false, "clean() refused a sticker photographed with its cut line")
+    }
+
+    // A white animal (a sheep) whose outline has a small gap: the outside mustn't leak in.
+    let sheep = makeImage { x, y in
+        let d = hypot(Double(x - 100), Double(y - 100))
+        if d < 60 { return (240, 236, 225, 255) }   // white wool
+        if d <= 64 { return x > 150 && abs(y - 100) <= 1 ? (245, 245, 240, 255) : (20, 20, 20, 255) } // outline, 3 px gap
+        if d <= 72 { return (248, 248, 245, 255) }  // paper margin
+        return (0, 0, 0, 0)
+    }
+    if let sh = StickerEdges.clean(sheep) {
+        let sp = pixels(sh)
+        func px(_ x: Int, _ y: Int) -> (r: Int, a: Int) {
+            let i = ((y + pad) * sh.width + x + pad) * 4
+            return (Int(sp[i]), Int(sp[i + 3]))
+        }
+        check(px(100, 100).a == 255 && px(100, 100).r == 240, "white wool inside the outline is kept")
+        check(px(100, 100 + 64 + border + 2).a == 0, "paper margin around the sheep is gone")
+    } else {
+        check(false, "clean() refused a white animal with a gap in its outline")
+    }
+
     let noOutline = makeImage { x, y in
         hypot(Double(x - 100), Double(y - 100)) < 60 ? (248, 248, 248, 255) : (0, 0, 0, 0)
     }

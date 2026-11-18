@@ -4,8 +4,10 @@ import Foundation
 /// Tidies a lifted sticker: removes leftover bits of the sticker's old white border and other
 /// fringe around the drawing, then adds an even white die-cut border.
 ///
-/// Relies on the drawing having a dark outline (the classroom stickers all do): anything white or
-/// see-through that can be reached from outside without crossing that outline is fringe.
+/// Relies on the drawing having a dark outline (the classroom stickers all do). First choice: keep
+/// what that outline encloses, so paper, the sheet's cut line and shadows outside it all go, and a
+/// white animal keeps its white. If the outline doesn't enclose the drawing, fall back to: anything
+/// white or see-through that can be reached from outside without crossing the outline is fringe.
 enum StickerEdges {
     /// If cleaning would keep less than this share of the original sticker, the outline assumption
     /// failed and the original cutout is better.
@@ -18,6 +20,11 @@ enum StickerEdges {
     /// Transparent margin added on every side so the new border is never cut off.
     static func padding(forWidth width: Int, height: Int) -> Int {
         borderRadius(forWidth: width, height: height) + 1
+    }
+
+    /// The outline is thickened by this much so small gaps in it don't let the outside in.
+    static func gapRadius(forWidth width: Int, height: Int) -> Int {
+        max(2, Int((Double(max(width, height)) * 0.004).rounded()))
     }
 
     /// Returns the cleaned image, grown by `padding` on every side, or nil to keep the original.
@@ -44,44 +51,82 @@ enum StickerEdges {
             return min(r, g, b) > 215 && max(r, g, b) - min(r, g, b) < 30
         }
 
-        // Flood fill from the edges through background-like pixels.
-        var outside = [Bool](repeating: false, count: w * h)
-        var stack: [Int] = []
-        for x in 0..<w { stack.append(x); stack.append((h - 1) * w + x) }
-        for y in 0..<h { stack.append(y * w); stack.append(y * w + w - 1) }
-        while let p = stack.popLast() {
-            if outside[p] || !backgroundLike(p) { continue }
-            outside[p] = true
-            let x = p % w
-            if x > 0 { stack.append(p - 1) }
-            if x < w - 1 { stack.append(p + 1) }
-            if p >= w { stack.append(p - w) }
-            if p < w * (h - 1) { stack.append(p + w) }
+        // The outline's dark ink, thickened to close small gaps.
+        func dark(_ p: Int) -> Bool {
+            let i = p * 4
+            let a = Int(px[i + 3])
+            guard a >= 140 else { return false }
+            let luma = (Int(px[i]) * 299 + Int(px[i + 1]) * 587 + Int(px[i + 2]) * 114) * 255 / (1000 * a)
+            return luma < 110
+        }
+        let gap = gapRadius(forWidth: image.width, height: image.height)
+        var wall = [Bool](repeating: false, count: w * h)
+        for y in 0..<h { for x in 0..<w where dark(y * w + x) {
+            for ny in max(0, y - gap)...min(h - 1, y + gap) { for nx in max(0, x - gap)...min(w - 1, x + gap) {
+                wall[ny * w + nx] = true
+            } }
+        } }
+
+        let opaque = (0..<(w * h)).reduce(0) { $0 + (px[$1 * 4 + 3] >= 140 ? 1 : 0) }
+        guard opaque > 0 else { return nil }
+
+        /// Floods from the image edges through `passable` pixels, then returns the largest piece of
+        /// what the flood didn't reach (dropping stray specks), or nil if that's too little to trust.
+        func drawing(_ passable: (Int) -> Bool) -> [Bool]? {
+            var outside = [Bool](repeating: false, count: w * h)
+            var stack: [Int] = []
+            for x in 0..<w { stack.append(x); stack.append((h - 1) * w + x) }
+            for y in 0..<h { stack.append(y * w); stack.append(y * w + w - 1) }
+            while let p = stack.popLast() {
+                if outside[p] || !passable(p) { continue }
+                outside[p] = true
+                let x = p % w
+                if x > 0 { stack.append(p - 1) }
+                if x < w - 1 { stack.append(p + 1) }
+                if p >= w { stack.append(p - w) }
+                if p < w * (h - 1) { stack.append(p + w) }
+            }
+            var label = [Int32](repeating: -1, count: w * h)
+            var sizes: [Int] = []
+            for start in 0..<(w * h) where !outside[start] && label[start] < 0 {
+                let id = Int32(sizes.count)
+                var count = 0
+                label[start] = id
+                stack = [start]
+                while let p = stack.popLast() {
+                    count += 1
+                    let x = p % w
+                    for q in [x > 0 ? p - 1 : -1, x < w - 1 ? p + 1 : -1, p >= w ? p - w : -1, p < w * (h - 1) ? p + w : -1]
+                    where q >= 0 && !outside[q] && label[q] < 0 {
+                        label[q] = id
+                        stack.append(q)
+                    }
+                }
+                sizes.append(count)
+            }
+            guard let keep = sizes.indices.max(by: { sizes[$0] < sizes[$1] }),
+                  Double(sizes[keep]) / Double(opaque) >= minimumKeptShare else { return nil }
+            return label.map { $0 == Int32(keep) }
         }
 
-        // Keep the largest connected piece of what's left (drops stray specks).
-        var label = [Int32](repeating: -1, count: w * h)
-        var sizes: [Int] = []
-        for start in 0..<(w * h) where !outside[start] && label[start] < 0 {
-            let id = Int32(sizes.count)
-            var count = 0
-            label[start] = id
-            stack = [start]
-            while let p = stack.popLast() {
-                count += 1
-                let x = p % w
-                for q in [x > 0 ? p - 1 : -1, x < w - 1 ? p + 1 : -1, p >= w ? p - w : -1, p < w * (h - 1) ? p + w : -1]
-                where q >= 0 && !outside[q] && label[q] < 0 {
-                    label[q] = id
-                    stack.append(q)
+        let inside: [Bool]
+        if var enclosed = drawing({ !wall[$0] }) {
+            // Give back the thickening: peel the paper it added just outside the ink.
+            for _ in 0..<gap {
+                let rim = (0..<(w * h)).filter { p in
+                    guard enclosed[p], !dark(p) else { return false }
+                    let x = p % w
+                    return x == 0 || x == w - 1 || p < w || p >= w * (h - 1)
+                        || !enclosed[p - 1] || !enclosed[p + 1] || !enclosed[p - w] || !enclosed[p + w]
                 }
+                for p in rim { enclosed[p] = false }
             }
-            sizes.append(count)
+            inside = enclosed
+        } else if let reachable = drawing(backgroundLike) {
+            inside = reachable
+        } else {
+            return nil
         }
-        guard let keep = sizes.indices.max(by: { sizes[$0] < sizes[$1] }) else { return nil }
-        let opaque = (0..<(w * h)).reduce(0) { $0 + (px[$1 * 4 + 3] >= 140 ? 1 : 0) }
-        guard opaque > 0, Double(sizes[keep]) / Double(opaque) >= minimumKeptShare else { return nil }
-        let inside = label.map { $0 == Int32(keep) }
 
         // New border: stamp a round brush on the drawing's edge pixels.
         var brush: [(Int, Int)] = []
