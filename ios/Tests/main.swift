@@ -20,6 +20,10 @@ check(TapClient.endpoint(server: "172.20.10.2:8080", path: "/tap")?.absoluteStri
 check(TapClient.endpoint(server: " http://mac.local:8080/ ", path: "/tap")?.absoluteString == "http://mac.local:8080/tap", "trims spaces and slash")
 check(TapClient.endpoint(server: "", path: "/tap") == nil, "empty server is nil")
 
+let logBody = try! JSONSerialization.jsonObject(with: TapClient.logBody(lines: ["10:15:59.123 app active"])) as! [String: Any]
+check(logBody["source"] as? String == "phone" && logBody["lines"] as? [String] == ["10:15:59.123 app active"],
+      "log body matches the server's /api/log")
+
 let body = try! JSONSerialization.jsonObject(with: TapClient.tapBody(id: "04A1B2C3D4E5F6")) as! [String: String]
 check(body == ["id": "04A1B2C3D4E5F6", "source": "phone"], "tap body matches the server API")
 

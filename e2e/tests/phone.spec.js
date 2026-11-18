@@ -4,7 +4,7 @@ const path = require('node:path');
 const { execFile } = require('node:child_process');
 const { promisify } = require('node:util');
 const { test, expect } = require('@playwright/test');
-const { PENGUIN, FOX_TRICK, STAR_SPECIAL, getCards, command, setCards, phoneTap, openScene } = require('./helpers');
+const { PENGUIN, FOX_TRICK, STAR_SPECIAL, getCards, command, setCards, phoneTap, openScene, logLines } = require('./helpers');
 
 const run = promisify(execFile);
 const IOS = path.resolve(__dirname, '../../ios');
@@ -76,6 +76,10 @@ test('a badge read by the phone walks into the zoo on the projector', async ({ p
   await openScene(page, 'zoo', 3);
   await phone('testCheckInSendsTaps', { tags: [PENGUIN.canonical_id], expect: '🐧 Penguin' });
   await expect(tally(page, 1)).toBeVisible();
+  // The phone's side of the story is in the shared log too.
+  const phoneLines = logLines().filter((l) => l.includes('[phone]'));
+  expect(phoneLines.some((l) => /app active/.test(l))).toBe(true);
+  expect(phoneLines.some((l) => new RegExp(`badge read ${PENGUIN.canonical_id}`).test(l))).toBe(true);
   await expect.poll(() => inside(page), { timeout: 15000 }).toContain(PENGUIN.canonical_id);
 });
 

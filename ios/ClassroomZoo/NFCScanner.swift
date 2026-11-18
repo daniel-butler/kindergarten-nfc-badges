@@ -44,6 +44,7 @@ final class NFCScanner: NSObject, ObservableObject {
         #endif
         guard NFCTagReaderSession.readingAvailable else {
             status = "NFC isn't available on this device"
+            AppLog.log("NFC isn't available on this device")
             return
         }
         session?.invalidate()
@@ -54,6 +55,7 @@ final class NFCScanner: NSObject, ObservableObject {
         session.alertMessage = message
         self.session = session
         session.begin()
+        AppLog.log(onceHandler == nil ? "NFC scanning started" : "NFC scanning for one badge to register")
         isScanning = true
         status = "Scanning…"
         haptics.prepare()
@@ -65,6 +67,7 @@ final class NFCScanner: NSObject, ObservableObject {
 
     fileprivate func handle(id: String, session: NFCTagReaderSession) {
         lastID = id
+        AppLog.log("badge read \(id)")
         if let done = onceHandler {
             onceHandler = nil
             haptics.notificationOccurred(.success)
@@ -95,9 +98,11 @@ final class NFCScanner: NSObject, ObservableObject {
             switch await TapClient.post(id: id, server: server) {
             case .success(let summary):
                 lastResponse = summary
+                AppLog.log("tap \(id) sent: \(summary)")
                 alert("\(summary)\nNext badge…")
             case .failure(let error):
                 lastResponse = "⚠️ \(error.localizedDescription)"
+                AppLog.log("tap \(id) not sent: \(error.localizedDescription)")
                 haptics.notificationOccurred(.error)
                 alert("⚠️ Server not reachable")
             }
@@ -115,6 +120,7 @@ final class NFCScanner: NSObject, ObservableObject {
                 try? await Task.sleep(nanoseconds: 300_000_000)
                 fakeTags?.removeFirst()
                 lastID = id
+                AppLog.log("badge read \(id) (test badge)")
                 if let done = onceHandler {
                     onceHandler = nil
                     isScanning = false
@@ -140,6 +146,7 @@ final class NFCScanner: NSObject, ObservableObject {
         onceHandler = nil
         isScanning = false
         session = nil
+        AppLog.log("NFC session ended: \(error.localizedDescription)")
         switch (error as? NFCReaderError)?.code {
         case .readerSessionInvalidationErrorUserCanceled:
             status = "Stopped. Tap Start Scanning."

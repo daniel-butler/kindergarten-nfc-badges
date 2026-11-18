@@ -256,6 +256,64 @@ const Confetti = (() => {
 })();
 
 // ===================================================================
+// Shared log: what the page sees goes into badge-server.log next to the server's and the phone's
+// ===================================================================
+
+const PageLog = (() => {
+  const MAX_QUEUED = 200; // kept while the server is unreachable, sent when it's back
+  const queue = [];
+  let timer = 0;
+
+  const stamp = () => {
+    const d = new Date();
+    return `${d.toTimeString().slice(0, 8)}.${String(d.getMilliseconds()).padStart(3, '0')}`;
+  };
+
+  function log(message) {
+    console.log('[zoo]', message);
+    queue.push(`${stamp()} ${message}`);
+    if (queue.length > MAX_QUEUED) queue.splice(0, queue.length - MAX_QUEUED);
+    if (!timer) timer = setTimeout(flush, 500);
+  }
+
+  async function flush() {
+    timer = 0;
+    const lines = queue.splice(0, 50);
+    if (!lines.length) return;
+    try {
+      const res = await fetch('/api/log', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ source: 'page', lines }),
+        keepalive: true,
+      });
+      if (!res.ok) throw new Error(res.status);
+    } catch {
+      queue.unshift(...lines);
+      if (queue.length > MAX_QUEUED) queue.splice(0, queue.length - MAX_QUEUED);
+      timer = setTimeout(flush, 3000);
+      return;
+    }
+    if (queue.length) timer = setTimeout(flush, 0);
+  }
+
+  addEventListener('pagehide', () => {
+    if (queue.length) {
+      const body = JSON.stringify({ source: 'page', lines: queue.splice(0, 50) });
+      navigator.sendBeacon('/api/log', new Blob([body], { type: 'application/json' }));
+    }
+  });
+  addEventListener('error', (e) => log(`error: ${e.message} (${e.filename?.split('/').pop()}:${e.lineno})`));
+  addEventListener('unhandledrejection', (e) => log(`error: ${e.reason?.message || e.reason}`));
+  document.addEventListener('visibilitychange', () => log(`page ${document.visibilityState}`));
+  addEventListener('online', () => log('browser online'));
+  addEventListener('offline', () => log('browser offline'));
+  log(`page loaded (${navigator.userAgent.match(/(Firefox|Chrome|Safari)\/[\d.]+/)?.[0] || 'browser'})`);
+
+  return { log };
+})();
+
+// ===================================================================
 // Core: cards, taps, scenes
 // ===================================================================
 
@@ -295,6 +353,7 @@ const Badge = (() => {
 
     show(id) {
       const next = scenes.find((s) => s.id === id) || scenes[0];
+      PageLog.log(`scene → ${next.id}`);
       if (current) safely(() => current.onExit?.());
       for (const t of sceneTimers) clearTimeout(t);
       sceneTimers = new Set();
@@ -375,6 +434,7 @@ const Badge = (() => {
       fn();
     } catch (err) {
       console.error(err);
+      PageLog.log(`scene error: ${err.message}`);
       addLog({ kind: 'note', text: `scene error: ${err.message}` });
     }
   }
@@ -396,6 +456,7 @@ const Badge = (() => {
     const now = performance.now();
     ev.repeat = lastTap.key === key && now - lastTap.at < REPEAT_WINDOW_MS;
     lastTap = { key, at: now };
+    PageLog.log(`tap ${ev.raw_id} → ${ev.card ? `${ev.card.emoji} ${ev.card.label}` : 'unknown'}${ev.repeat ? ' (repeat)' : ''}`);
     addLog({ kind: 'tap', ev });
     if (current?.onTap && (!ev.repeat || current.acceptRepeats)) safely(() => current.onTap(ev));
   }
@@ -406,10 +467,22 @@ const Badge = (() => {
     Panel.render();
   }
 
+  let source = null;
+  let lastEventId = ''; // so a brand-new connection can still catch up on what it missed
+  let retryTimer = 0;
+
   function connect() {
-    const source = new EventSource('/events');
-    source.addEventListener('open', async () => {
+    clearTimeout(retryTimer);
+    source?.close();
+    const es = new EventSource(lastEventId ? `/events?last=${encodeURIComponent(lastEventId)}` : '/events');
+    source = es;
+    const remember = (e) => {
+      if (e.lastEventId) lastEventId = e.lastEventId;
+    };
+    es.addEventListener('open', async () => {
+      if (source !== es) return;
       connected = true;
+      PageLog.log('connected to server');
       api.banner(null);
       try {
         setCards(await (await fetch('/api/cards')).json());
@@ -418,14 +491,31 @@ const Badge = (() => {
       }
       Panel.render();
     });
-    source.addEventListener('error', () => {
+    es.addEventListener('error', () => {
+      if (source !== es) return;
+      const closed = es.readyState === EventSource.CLOSED;
+      if (connected || closed) PageLog.log(`lost connection to server (${closed ? 'closed' : 'retrying'})`);
       connected = false;
       api.banner('🔌 Reconnecting to server…', { error: true, ms: 0 });
       Panel.render();
+      // The browser retries by itself, except when it has given up for good (e.g. after a bad
+      // answer): then only a new connection brings the page back.
+      if (closed) retryTimer = setTimeout(connect, 2000);
     });
-    source.addEventListener('tap', (e) => handleTap(JSON.parse(e.data)));
-    source.addEventListener('cards', (e) => setCards(JSON.parse(e.data)));
-    source.addEventListener('command', (e) => Commands.run(JSON.parse(e.data).action));
+    es.addEventListener('hello', remember);
+    es.addEventListener('tap', (e) => {
+      remember(e);
+      handleTap(JSON.parse(e.data));
+    });
+    es.addEventListener('cards', (e) => {
+      remember(e);
+      setCards(JSON.parse(e.data));
+    });
+    es.addEventListener('command', (e) => {
+      remember(e);
+      PageLog.log(`command ${JSON.parse(e.data).action}`);
+      Commands.run(JSON.parse(e.data).action);
+    });
   }
 
   api._connect = connect;

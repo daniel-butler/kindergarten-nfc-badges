@@ -9,6 +9,7 @@ struct PresenterView: View {
     @State private var status: String?
     @State private var showHelp = false
     @State private var confirmReset = false
+    @State private var reachable = true
     private let refresh = Timer.publish(every: 1.5, on: .main, in: .common).autoconnect()
     private let haptics = UINotificationFeedbackGenerator()
 
@@ -126,16 +127,27 @@ struct PresenterView: View {
             case .success:
                 haptics.notificationOccurred(.success)
                 status = "✓ Sent: \(action)"
+                AppLog.log("presenter: sent \(action)")
                 await load()
             case .failure(let error):
                 haptics.notificationOccurred(.error)
+                AppLog.log("presenter: \(action) failed: \(error.localizedDescription)")
                 status = "⚠️ \(error.localizedDescription) — use the Mac shortcuts (Help)"
             }
         }
     }
 
     private func load() async {
-        if case .success(let fresh) = await TapClient.presenter(server: server) { info = fresh }
+        switch await TapClient.presenter(server: server) {
+        case .success(let fresh):
+            info = fresh
+            if !reachable { AppLog.log("presenter: server reachable again") }
+            reachable = true
+        case .failure(let error):
+            // Polled every 1.5 s, so only the change is worth a line.
+            if reachable { AppLog.log("presenter: can't reach the server: \(error.localizedDescription)") }
+            reachable = false
+        }
     }
 }
 

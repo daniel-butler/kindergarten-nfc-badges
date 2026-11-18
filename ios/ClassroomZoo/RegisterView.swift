@@ -59,6 +59,7 @@ struct RegisterView: View {
                     let result = await StickerCutout.lift(photo)
                     cutout = result.image
                     lifted = result.lifted
+                    AppLog.log("register: photo \(result.lifted ? "lifted" : "not lifted, kept as taken") (\(Int(result.image.size.width))×\(Int(result.image.size.height)))")
                     step = .details(id: target.id, existing: target.existing)
                 }
             }
@@ -76,6 +77,7 @@ struct RegisterView: View {
             Task {
                 switch await TapClient.resolve(id: uid, server: server) {
                 case .success(let r):
+                    AppLog.log("register: \(uid) is \(r.card.map { "\($0.emoji) \($0.label)" } ?? "a new badge")")
                     if let card = r.card {
                         step = .existing(card)
                     } else {
@@ -83,6 +85,7 @@ struct RegisterView: View {
                         takePhoto(id: r.canonicalID, existing: nil)
                     }
                 case .failure(let error):
+                    AppLog.log("register: looking up \(uid) failed: \(error.localizedDescription)")
                     step = .failed(error.localizedDescription)
                 }
             }
@@ -123,9 +126,11 @@ struct RegisterView: View {
             switch result {
             case .success(let saved):
                 haptics.notificationOccurred(.success)
+                AppLog.log("register: saved \(saved.emoji) \(saved.label) (\(saved.role)\(png == nil ? "" : ", with photo"))")
                 step = .saved(saved)
             case .failure(let error):
                 haptics.notificationOccurred(.error)
+                AppLog.log("register: saving \(card.label) failed: \(error.localizedDescription)")
                 step = .failed(error.localizedDescription)
             }
         }
@@ -135,8 +140,10 @@ struct RegisterView: View {
         var updated = card
         updated.away = away
         step = .existing(updated)
+        AppLog.log("register: \(card.label) \(away ? "💤 not here today" : "is here")")
         Task {
             if case .failure(let error) = await TapClient.upsert(updated, server: server) {
+                AppLog.log("register: updating \(card.label) failed: \(error.localizedDescription)")
                 step = .failed(error.localizedDescription)
             }
         }

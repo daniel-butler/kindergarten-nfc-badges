@@ -180,6 +180,9 @@ everything in **⌥0 Debug**.
   - Finish with **Reset**.
 - [ ] Make sure ⌥3 runs smoothly on the Mac. If it doesn't, use ⌥6, the 2D backup.
 
+If something odd happens during class, the full story (server, projector page and phone) is in
+`~/badge-server.log`.
+
 **In the classroom**
 - [ ] Mac on the iPhone hotspot; server running with `--cards ~/cards.json`.
 - [ ] Chrome → `http://localhost:8080/#zoo`, **Click to start**, fullscreen (⌥F).

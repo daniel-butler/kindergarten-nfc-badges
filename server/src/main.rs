@@ -1,4 +1,6 @@
+mod history;
 mod ids;
+mod journal;
 mod presenter;
 mod registry;
 mod taps;
@@ -6,12 +8,14 @@ mod taps;
 use std::convert::Infallible;
 use std::net::SocketAddr;
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
-use std::time::{Instant, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use axum::body::Bytes;
-use axum::extract::{DefaultBodyLimit, Path, Query, State};
-use axum::http::{StatusCode, Uri, header};
+use axum::extract::{ConnectInfo, DefaultBodyLimit, Path, Query, Request, State};
+use axum::http::{HeaderMap, StatusCode, Uri, header};
+use axum::middleware::{self, Next};
 use axum::response::sse::{Event, KeepAlive, Sse};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post, put};
@@ -22,7 +26,9 @@ use tokio::sync::broadcast;
 use tokio_stream::Stream;
 use tokio_stream::StreamExt;
 use tokio_stream::wrappers::BroadcastStream;
+use tokio_stream::wrappers::errors::BroadcastStreamRecvError;
 
+use history::History;
 use presenter::{PresenterState, parse_command};
 use registry::{Card, ImageError, MAX_IMAGE_BYTES, Registry};
 use taps::{Linker, Source, TapEvent};
@@ -47,7 +53,31 @@ struct Inner {
 #[derive(Clone)]
 struct AppState {
     inner: Arc<Mutex<Inner>>,
-    tx: broadcast::Sender<Broadcast>,
+    tx: broadcast::Sender<(u64, Broadcast)>,
+    history: Arc<Mutex<History<Broadcast>>>,
+    /// Projector pages connected to /events right now.
+    pages: Arc<AtomicUsize>,
+}
+
+impl AppState {
+    /// Tells every connected page, and remembers it for pages that reconnect.
+    fn send(&self, msg: Broadcast) {
+        // Held while sending so /events can subscribe without missing or doubling an event.
+        let mut history = self.history.lock().unwrap();
+        let id = history.push(msg.clone(), Instant::now());
+        let _ = self.tx.send((id, msg));
+    }
+}
+
+fn source_name(source: Source) -> &'static str {
+    match source {
+        Source::Phone => "phone",
+        Source::Reader => "reader",
+    }
+}
+
+fn card_name(card: &Card) -> String {
+    format!("{} {}", card.emoji, card.label)
 }
 
 type ApiError = (StatusCode, String);
@@ -95,27 +125,107 @@ async fn tap(
             outcome.cards_changed.then(|| registry.cards().to_vec()),
         )
     };
+    journal::write(
+        "server",
+        &format!(
+            "tap from {} {} → {}{}",
+            source_name(event.source),
+            event.raw_id,
+            event.card.as_ref().map_or("unknown".to_string(), card_name),
+            if event.linked { " (linked)" } else { "" }
+        ),
+    );
     if let Some(cards) = cards {
-        let _ = state.tx.send(Broadcast::Cards(cards));
+        state.send(Broadcast::Cards(cards));
     }
-    let _ = state.tx.send(Broadcast::Tap(Box::new(event.clone())));
+    state.send(Broadcast::Tap(Box::new(event.clone())));
     Ok(Json(event))
+}
+
+fn to_event(boot: u64, id: u64, msg: Broadcast) -> Option<Event> {
+    let event = match msg {
+        Broadcast::Tap(t) => Event::default().event("tap").json_data(t),
+        Broadcast::Cards(c) => Event::default().event("cards").json_data(c),
+        Broadcast::Command(action) => Event::default()
+            .event("command")
+            .json_data(serde_json::json!({ "action": action })),
+    };
+    event.ok().map(|e| e.id(history::event_id(boot, id)))
+}
+
+/// Counts a connected page while its event stream lives.
+struct PageGuard(Arc<AtomicUsize>);
+
+impl Drop for PageGuard {
+    fn drop(&mut self) {
+        let open = self.0.fetch_sub(1, Ordering::SeqCst) - 1;
+        journal::write("server", &format!("page disconnected ({open} open)"));
+    }
+}
+
+#[derive(Deserialize)]
+struct EventsQuery {
+    /// The last event a page saw, for a new connection that can't send `Last-Event-ID`.
+    last: Option<String>,
 }
 
 async fn events(
     State(state): State<AppState>,
+    Query(query): Query<EventsQuery>,
+    headers: HeaderMap,
 ) -> Sse<impl Stream<Item = Result<Event, Infallible>>> {
-    let stream = BroadcastStream::new(state.tx.subscribe()).filter_map(|msg| {
-        let event = match msg.ok()? {
-            Broadcast::Tap(t) => Event::default().event("tap").json_data(t),
-            Broadcast::Cards(c) => Event::default().event("cards").json_data(c),
-            Broadcast::Command(action) => Event::default()
-                .event("command")
-                .json_data(serde_json::json!({ "action": action })),
-        };
-        event.ok().map(Ok)
+    let (rx, missed, boot, newest) = {
+        let history = state.history.lock().unwrap();
+        let rx = state.tx.subscribe();
+        let last = headers
+            .get("last-event-id")
+            .and_then(|v| v.to_str().ok())
+            .or(query.last.as_deref())
+            .and_then(|v| history.parse_last(v));
+        let missed = last.map_or_else(Vec::new, |l| history.since(l, Instant::now()));
+        (rx, missed, history.boot(), history.last())
+    };
+    let open = state.pages.fetch_add(1, Ordering::SeqCst) + 1;
+    let replaying = if missed.is_empty() {
+        String::new()
+    } else {
+        format!(", replaying {} missed", missed.len())
+    };
+    journal::write(
+        "server",
+        &format!("page connected ({open} open){replaying}"),
+    );
+    let guard = PageGuard(state.pages.clone());
+
+    // Something right away: Firefox doesn't count the connection as open until data arrives.
+    // Its id is where this page is up to, so a later reconnect replays from here.
+    let caught_up = missed.last().map_or(newest, |(id, _)| *id);
+    let hello = Event::default()
+        .event("hello")
+        .id(history::event_id(boot, caught_up))
+        .retry(Duration::from_secs(1))
+        .data(boot.to_string());
+    let catch_up = std::iter::once(hello)
+        .chain(
+            missed
+                .into_iter()
+                .filter_map(move |(id, msg)| to_event(boot, id, msg)),
+        )
+        .map(Ok);
+    let live = BroadcastStream::new(rx).filter_map(move |msg| {
+        let _alive = &guard;
+        match msg {
+            Ok((id, msg)) => to_event(boot, id, msg).map(Ok),
+            Err(BroadcastStreamRecvError::Lagged(n)) => {
+                journal::write(
+                    "server",
+                    &format!("a page fell behind and skipped {n} events"),
+                );
+                None
+            }
+        }
     });
-    Sse::new(stream).keep_alive(KeepAlive::default())
+    Sse::new(tokio_stream::iter(catch_up).chain(live)).keep_alive(KeepAlive::default())
 }
 
 async fn get_cards(State(state): State<AppState>) -> Json<Vec<Card>> {
@@ -134,7 +244,11 @@ async fn put_cards(
             .map_err(|e| (StatusCode::CONFLICT, e))?;
         inner.registry.cards().to_vec()
     };
-    let _ = state.tx.send(Broadcast::Cards(cards.clone()));
+    journal::write(
+        "server",
+        &format!("replaced the card list ({} cards)", cards.len()),
+    );
+    state.send(Broadcast::Cards(cards.clone()));
     Ok(Json(cards))
 }
 
@@ -148,7 +262,7 @@ fn mutate<T>(
         let value = change(&mut inner.registry)?;
         (value, inner.registry.cards().to_vec())
     };
-    let _ = state.tx.send(Broadcast::Cards(cards));
+    state.send(Broadcast::Cards(cards));
     Ok(value)
 }
 
@@ -156,10 +270,20 @@ async fn upsert_card(
     State(state): State<AppState>,
     Json(card): Json<Card>,
 ) -> Result<Json<Card>, ApiError> {
-    mutate(&state, |reg| {
+    let saved = mutate(&state, |reg| {
         reg.upsert(card).map_err(|e| (StatusCode::CONFLICT, e))
-    })
-    .map(Json)
+    })?;
+    journal::write(
+        "server",
+        &format!(
+            "saved card {} ({}, {:?}{})",
+            card_name(&saved),
+            saved.canonical_id,
+            saved.role,
+            if saved.away { ", 💤 not here" } else { "" }
+        ),
+    );
+    Ok(Json(saved))
 }
 
 #[derive(Deserialize)]
@@ -195,7 +319,8 @@ async fn put_card_image(
     body: Bytes,
 ) -> Result<Json<Card>, ApiError> {
     let id = ids::normalize(&id).ok_or((StatusCode::NOT_FOUND, "no such card".to_string()))?;
-    mutate(&state, |reg| {
+    let kb = body.len() / 1024;
+    let saved = mutate(&state, |reg| {
         reg.set_image(&id, &body, now_ms()).map_err(|e| match e {
             ImageError::NotFound => (StatusCode::NOT_FOUND, format!("no card {id}")),
             ImageError::NotPng => (
@@ -208,8 +333,12 @@ async fn put_card_image(
             ),
             ImageError::Io(e) => (StatusCode::INTERNAL_SERVER_ERROR, e),
         })
-    })
-    .map(Json)
+    })?;
+    journal::write(
+        "server",
+        &format!("photo for {} ({kb} KB)", card_name(&saved)),
+    );
+    Ok(Json(saved))
 }
 
 async fn get_presenter(State(state): State<AppState>) -> Json<PresenterState> {
@@ -252,14 +381,16 @@ async fn command(
             _ => None,
         }
     };
+    journal::write("server", &format!("command {action}"));
     if let Some(cards) = cards {
-        let _ = state.tx.send(Broadcast::Cards(cards));
+        state.send(Broadcast::Cards(cards));
     }
-    let _ = state.tx.send(Broadcast::Command(action));
+    state.send(Broadcast::Command(action));
     Ok(Json(serde_json::json!({ "ok": true })))
 }
 
 async fn clear_away(State(state): State<AppState>) -> Result<Json<Vec<Card>>, ApiError> {
+    journal::write("server", "everyone's here: cleared 💤");
     mutate(&state, |reg| {
         reg.clear_away()
             .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
@@ -304,7 +435,57 @@ async fn put_link_mode(
     Json(mode): Json<LinkMode>,
 ) -> Json<LinkMode> {
     state.inner.lock().unwrap().linker.set_enabled(mode.enabled);
+    journal::write(
+        "server",
+        &format!("link mode {}", if mode.enabled { "on" } else { "off" }),
+    );
     Json(mode)
+}
+
+#[derive(Deserialize)]
+struct ClientLog {
+    source: String,
+    lines: Vec<String>,
+}
+
+/// The projector page and the phone send their own lines here, so everything is in one log.
+async fn client_log(Json(req): Json<ClientLog>) -> Result<StatusCode, ApiError> {
+    if !matches!(req.source.as_str(), "page" | "phone") {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            "source must be page or phone".to_string(),
+        ));
+    }
+    for line in req.lines.iter().take(100) {
+        journal::write(&req.source, line);
+    }
+    Ok(StatusCode::NO_CONTENT)
+}
+
+/// Requests the phone makes every 1.5 s, or that log themselves, only show up when they fail.
+const QUIET_PATHS: [&str; 3] = ["/api/presenter", "/api/log", "/events"];
+
+async fn log_requests(req: Request, next: Next) -> Response {
+    let method = req.method().clone();
+    let path = req.uri().path().to_string();
+    let client = req
+        .extensions()
+        .get::<ConnectInfo<SocketAddr>>()
+        .map_or_else(|| "?".to_string(), |c| c.0.ip().to_string());
+    let started = Instant::now();
+    let response = next.run(req).await;
+    let status = response.status();
+    if !QUIET_PATHS.contains(&path.as_str()) || !status.is_success() {
+        journal::write(
+            "http",
+            &format!(
+                "{client} {method} {path} → {} in {} ms",
+                status.as_u16(),
+                started.elapsed().as_millis()
+            ),
+        );
+    }
+    response
 }
 
 async fn static_file(uri: Uri) -> Response {
@@ -403,6 +584,15 @@ async fn main() {
         registry.path().display(),
         registry.cards().len()
     );
+    let log_path = registry.path().with_file_name("badge-server.log");
+    match journal::open(&log_path) {
+        Ok(()) => println!("Log file:        {}", log_path.display()),
+        Err(e) => eprintln!("cannot write the log file {}: {e}", log_path.display()),
+    }
+    journal::write(
+        "server",
+        &format!("started with {} cards", registry.cards().len()),
+    );
 
     let (tx, _) = broadcast::channel(256);
     let state = AppState {
@@ -412,6 +602,8 @@ async fn main() {
             presenter: PresenterState::default(),
         })),
         tx,
+        history: Arc::new(Mutex::new(History::new(now_ms()))),
+        pages: Arc::new(AtomicUsize::new(0)),
     };
     let app = Router::new()
         .route("/tap", post(tap))
@@ -430,7 +622,9 @@ async fn main() {
         )
         .route("/images/{file}", get(get_image))
         .route("/api/link-mode", get(get_link_mode).put(put_link_mode))
+        .route("/api/log", post(client_log))
         .fallback(static_file)
+        .layer(middleware::from_fn(log_requests))
         .with_state(state);
 
     let listener = tokio::net::TcpListener::bind(config.addr)
@@ -441,5 +635,10 @@ async fn main() {
         });
     println!("Listening on     {}", config.addr);
     print_urls(config.addr.port());
-    axum::serve(listener, app).await.unwrap();
+    axum::serve(
+        listener,
+        app.into_make_service_with_connect_info::<SocketAddr>(),
+    )
+    .await
+    .unwrap();
 }

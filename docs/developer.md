@@ -29,6 +29,7 @@ as SSE `command` events, so both paths behave the same.
 | PUT    | `/api/cards/{id}/image` | `image/png`, max 5 MB → `images/<id>.png` next to `cards.json` |
 | POST   | `/api/cards/clear-away` | clear 💤 on every card |
 | GET    | `/api/presenter` | `{ waiting: { kind: "trick"\|"special", card, raw_id, ts } \| null, last_unknown: { raw_id, ts } \| null }` |
+| POST   | `/api/log`       | `{ "source": "page"\|"phone", "lines": [..] }` → 204, appended to `badge-server.log` |
 | POST   | `/api/command` | `{ "action": "let-in" }` → broadcast as SSE `command`. Actions: `scene-setup scene-secret scene-zoo scene-list scene-who scene-gate scene-debug toggle-list let-in keep-out allow-special party reset` |
 | GET    | `/images/<id>.png` | sticker photos |
 | GET/PUT| `/api/link-mode` | `{"enabled":true}` turns on alias linking (the Setup scene does this) |
@@ -60,6 +61,19 @@ cd ios && swiftc ClassroomZoo/TapClient.swift ClassroomZoo/StickerEdges.swift Te
 BADGE_SERVER=localhost:8080 /tmp/tapcheck            # also talks to a running server
 ```
 
+### Connection tests (Chrome and Firefox)
+
+`e2e/tests/connection.spec.js` puts a small TCP relay between the projector page and the server so
+a test can cut the live connection or make the server unreachable, the way a network blip, a
+sleeping Mac or a restarted server would. They run in Chrome **and Firefox** (the classroom Mac
+uses Firefox), and check the page comes back by itself and that taps made during the outage
+still reach the zoo.
+
+How it works: every event gets an id; the server keeps the last 2 minutes (up to 100) and replays
+what a reconnecting page missed (`Last-Event-ID`, or `?last=` for a fresh connection). Each new
+connection starts with a `hello` event, because Firefox doesn't count the connection as open
+until data arrives (otherwise it waits for the 15-second keep-alive).
+
 ### Phone and page together
 
 ```sh
@@ -89,6 +103,23 @@ Linux. On macOS it runs the Swift checks, builds the iOS app, and runs the phone
 The sticker cleanup also runs on a Mac:
 `swiftc -O ios/Tools/clean-sticker/main.swift ios/ClassroomZoo/StickerEdges.swift -o /tmp/clean-sticker`,
 then `/tmp/clean-sticker photo.png sticker.png`.
+
+## The shared log
+
+The server writes `badge-server.log` next to the cards file (`~/badge-server.log` when run with
+`--cards ~/cards.json`). The projector page and Zookeeper send their own lines to `POST /api/log`,
+so everything is in one place, in order:
+
+```
+2026-11-18T15:16:14.123Z [server] tap from phone 04C718FE082289 → 🐑 Sheep
+2026-11-18T15:16:14.150Z [page] 10:16:14.140 tap 04C718FE082289 → 🐑 Sheep
+2026-11-18T15:17:02.004Z [phone] 10:17:01.998 app in the background
+2026-11-18T15:17:05.311Z [page] 10:17:05.300 lost connection to server (retrying)
+```
+
+Server times are UTC; page and phone lines start with their own local time. Lines the page or
+phone write while the Mac can't be reached are sent once it can. Requests the phone polls every
+1.5 s (`/api/presenter`) only appear when they fail.
 
 ## Add a scene
 

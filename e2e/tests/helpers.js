@@ -82,3 +82,10 @@ async function command(request, action) {
   return res;
 }
 module.exports.command = command;
+
+/** Lines of the shared log the e2e server writes next to its cards file. */
+function logLines() {
+  const file = require('node:path').join(require('node:path').dirname(process.env.BADGE_E2E_CARDS), 'badge-server.log');
+  return require('node:fs').existsSync(file) ? require('node:fs').readFileSync(file, 'utf8').split('\n') : [];
+}
+module.exports.logLines = logLines;
