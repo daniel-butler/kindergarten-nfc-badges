@@ -1,6 +1,6 @@
 const { test, expect } = require('@playwright/test');
 const {
-  reloadPage, PENGUIN, LION, FOX_TRICK, manyCards, setCards, phoneTap, openScene, readerScan, scene,
+  reloadPage, uploadImage, getCards, PENGUIN, LION, FOX_TRICK, manyCards, setCards, phoneTap, openScene, readerScan, scene,
 } = require('./helpers');
 
 const slot = (page, card) => page.locator(`.zoo-slot.filled[data-id="${card.canonical_id}"]`);
@@ -169,5 +169,55 @@ test.describe('25 badges at 720p', () => {
       expect(box.y + box.height).toBeLessThanOrEqual(720);
       expect(box.x + box.width).toBeLessThanOrEqual(1280);
     }
+  });
+});
+
+test.describe('sticker photos and not here today', () => {
+  const sticker = (page, card) => page.locator(`img.sticker[src^="/images/${card.canonical_id}.png"]`);
+
+  test('The List shows the sticker photo for cards that have one', async ({ page, request }) => {
+    await uploadImage(request, PENGUIN.canonical_id);
+    await openScene(page, 'list', 3);
+    const row = page.locator(`.list-row[data-id="${PENGUIN.canonical_id}"]`);
+    await expect(row.locator('img.sticker')).toHaveAttribute('src', /^\/images\/04A1B2C3D4E5F6\.png\?v=\d+$/);
+    await expect(page.locator(`.list-row[data-id="${LION.canonical_id}"]`)).toContainText('🦁');
+  });
+
+  test('Who has the ___? shows the sticker photo', async ({ page, request }) => {
+    for (const c of [PENGUIN, LION, FOX_TRICK]) await uploadImage(request, c.canonical_id);
+    await openScene(page, 'who', 3);
+    await expect(page.locator('.who-target img.sticker')).toBeVisible();
+  });
+
+  test('Setup and Debug show sticker photos too', async ({ page, request }) => {
+    await uploadImage(request, PENGUIN.canonical_id);
+    await openScene(page, 'setup', 3);
+    await expect(sticker(page, PENGUIN)).toBeVisible();
+    await page.keyboard.press('Alt+0');
+    await phoneTap(request, PENGUIN.canonical_id);
+    await expect(page.locator('.debug-log').locator('img.sticker')).toHaveCount(1);
+  });
+
+  test('not here today: The List fades it with 💤 and Who has never asks for it', async ({ page, request }) => {
+    await setCards(request, [PENGUIN, { ...LION, away: true }]);
+    await openScene(page, 'list', 2);
+    const lion = page.locator(`.list-row[data-id="${LION.canonical_id}"]`);
+    await expect(lion).toHaveClass(/away/);
+    await expect(lion).toContainText('💤');
+    await page.keyboard.press('Alt+5');
+    for (let i = 0; i < 5; i++) {
+      await expect(page.locator('.who-target')).toHaveAttribute('data-id', PENGUIN.canonical_id);
+      await page.keyboard.press('Alt+s');
+    }
+  });
+
+  test("Everyone's here clears not here today from the panel", async ({ page, request }) => {
+    await setCards(request, [{ ...PENGUIN, away: true }, { ...LION, away: true }]);
+    await openScene(page, 'setup', 2);
+    await expect(page.locator('.mini-card.away')).toHaveCount(2);
+    await page.keyboard.press('Alt+p');
+    await page.locator('#panel button', { hasText: "Everyone's here" }).click();
+    await expect.poll(async () => (await getCards(request)).filter((c) => c.away).length).toBe(0);
+    await expect(page.locator('.mini-card.away')).toHaveCount(0);
   });
 });

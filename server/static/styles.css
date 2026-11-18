@@ -646,3 +646,19 @@ body.kid-mode .list-lookup { background: #fff; border: 0.6vmin solid var(--ink);
 /* Who has */
 body.kid-mode .scene-who.nope { background: #7048e8; }
 body.kid-mode .scene-who.nope .title, body.kid-mode .scene-who.nope .big-label { color: #fff; text-shadow: none; }
+
+/* ---------- sticker photos and not here today ---------- */
+
+.sticker { display: inline-block; object-fit: contain; max-width: 100%; user-select: none; }
+.emoji-art { font-family: var(--emoji); line-height: 1; }
+.badge-circle .sticker { max-width: 46vmin; max-height: 46vmin; }
+.ring .sticker, .zoo-slot .sticker, .walker .sticker { height: 82%; }
+.mini-card .sticker { height: 80%; }
+.mini-card.away { opacity: 0.45; position: relative; }
+.mini-card.away::before { content: "💤"; position: absolute; left: -1vmin; top: -1vmin; font-size: 4vmin; font-family: var(--emoji); }
+.list-row .sticker { height: calc(var(--row) * 0.85); }
+.list-row .emoji-art { font-size: calc(var(--row) * 0.75); }
+.list-row.away { opacity: 0.45; }
+.list-row .away-mark { font-family: var(--emoji); font-size: calc(var(--row) * 0.6); }
+.list-lookup .sticker { height: 7vmin; }
+.debug-log .sticker { vertical-align: middle; }

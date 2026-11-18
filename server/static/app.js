@@ -505,6 +505,7 @@ const Panel = (() => {
       current?.onSkip ? button(current.skipLabel || 'Skip / next', '⌥S', () => current.onSkip()) : null,
       ...(current?.actions || []).map((a) => button(a.label, null, a.run)),
       button('Fullscreen', '⌥F', fullscreen, !!document.fullscreenElement),
+      button("💤 Everyone's here", null, () => fetch('/api/cards/clear-away', { method: 'POST' }).catch(() => {})),
       button(Sound.muted ? 'Sound: OFF' : 'Sound: on', '⌥M', () => (Sound.muted = !Sound.muted), Sound.muted),
       button(Reader.testMode ? 'Typing test mode: ON' : 'Typing test mode: off', '⌥T', () => Reader.toggleTestMode(), Reader.testMode),
       el('h2', {}, 'Test'),
@@ -548,9 +549,22 @@ const Panel = (() => {
 // Shared scene bits
 // ===================================================================
 
+/** The card's sticker photo when it has one, else its emoji. `sizeVmin` null lets CSS size it. */
+function cardArt(card, sizeVmin) {
+  if (card.image) {
+    return el('img', {
+      class: 'sticker',
+      src: card.image,
+      alt: card.label,
+      draggable: 'false',
+      style: sizeVmin ? `height:${sizeVmin}vmin` : null,
+    });
+  }
+  return el('span', { class: 'emoji-art', style: sizeVmin ? `font-size:${sizeVmin}vmin` : null }, card.emoji);
+}
+
 function cardCircle(card) {
-  return el('div', { class: 'badge-circle pop', style: `background:${card.color.hex}` },
-    el('div', { class: 'huge-emoji' }, card.emoji));
+  return el('div', { class: 'badge-circle pop', style: `background:${card.color.hex}` }, cardArt(card, 36));
 }
 
 function cardConfetti(card) {
@@ -609,11 +623,11 @@ Badge.registerScene((() => {
         el('div', { class: 'subtitle' }, 'To link phone + reader: tap on one, then the other'),
         el('div', { class: 'card-strip' }, Badge.cards.map((c) =>
           el('button', {
-            class: `mini-card ${c.trick ? 'trick' : ''}`,
+            class: `mini-card ${c.trick ? 'trick' : ''} ${c.away ? 'away' : ''}`,
             style: `background:${c.color.hex}`,
             title: c.label,
             onclick: () => startEdit(c),
-          }, c.emoji))),
+          }, cardArt(c, null)))),
       ];
     }
   }
@@ -783,7 +797,7 @@ function ring(card, size, attrs = {}) {
     title: card.label,
     'data-id': card.canonical_id,
     ...attrs,
-  }, card.emoji);
+  }, cardArt(card, null));
 }
 
 function shuffle(list) {
@@ -884,7 +898,7 @@ Badge.registerScene((() => {
       style: `background:${card.color.hex}`,
       'data-id': card.canonical_id,
       title: card.label,
-    }, card.emoji);
+    }, cardArt(card, null));
   }
 
   function renderGate() {
@@ -949,7 +963,7 @@ Badge.registerScene((() => {
     const walker = el('div', {
       class: 'walker',
       style: `width:${size}px;height:${size}px;font-size:${size * 0.62}px`,
-    }, el('div', { class: 'bob ring', style: `background:${card.color.hex}` }, card.emoji));
+    }, el('div', { class: 'bob ring', style: `background:${card.color.hex}` }, cardArt(card, null)));
     root.append(walker);
     hint(`Welcome, ${card.label} keeper!`);
     hintTimer = Badge.later(idleHint, WALK_MS + 800);
@@ -1108,7 +1122,7 @@ Badge.registerScene((() => {
     const raw = lookup.raw.toUpperCase();
     let result;
     if (lookup.searching) result = el('span', { class: 'searching' }, 'looking… 🤔');
-    else if (lookup.card) result = [el('span', { class: 'em' }, lookup.card.emoji), ` ${lookup.card.label}!`];
+    else if (lookup.card) result = [cardArt(lookup.card, null), ` ${lookup.card.label}!`];
     else result = '❌ Not on the list!';
     return el('div', { class: `list-lookup ${lookup.searching ? '' : 'pop'}` },
       el('span', { class: 'mono' }, `🔍 ${raw}`), ' → ', result);
@@ -1124,11 +1138,12 @@ Badge.registerScene((() => {
       lookupLine(),
       cards.length
         ? el('div', { class: 'list-grid', 'data-rows': rows }, cards.map((c) => el('div', {
-          class: `list-row ${c.canonical_id === hitId ? 'hit' : ''}`,
+          class: `list-row ${c.canonical_id === hitId ? 'hit' : ''} ${c.away ? 'away' : ''}`,
           'data-id': c.canonical_id,
         },
         el('span', { class: 'list-num mono' }, c.canonical_id),
-        el('span', { class: 'em' }, c.emoji),
+        cardArt(c, null),
+        c.away ? el('span', { class: 'away-mark' }, '💤') : null,
         el('span', { class: 'list-swatch', style: `background:${c.color.hex}`, title: c.color.name }))))
         : el('div', { class: 'subtitle' }, 'No badges registered yet'));
     fit();
@@ -1204,7 +1219,7 @@ Badge.registerScene((() => {
   let timer;
 
   function pickNext() {
-    const cards = Badge.cards;
+    const cards = Badge.cards.filter((c) => !c.away);
     const previous = target?.canonical_id;
     target = null;
     if (!cards.length) return;
@@ -1254,7 +1269,7 @@ Badge.registerScene((() => {
     skipLabel: '⏭️ Next animal',
     onCards() {
       if (celebrating) return;
-      const fresh = target && Badge.cards.find((c) => c.canonical_id === target.canonical_id);
+      const fresh = target && Badge.cards.find((c) => c.canonical_id === target.canonical_id && !c.away);
       if (fresh) {
         target = fresh;
         ask();
@@ -1931,7 +1946,7 @@ Badge.registerScene((() => {
       el('td', { class: 'mono' }, ev.raw_id),
       el('td', { class: 'mono' }, ev.canonical_id),
       ev.card
-        ? el('td', {}, el('span', { class: 'em' }, ev.card.emoji), ` ${ev.card.label}${ev.card.trick ? ' 🎭' : ''} ${flags}`)
+        ? el('td', {}, cardArt(ev.card, 4), ` ${ev.card.label}${ev.card.trick ? ' 🎭' : ''} ${flags}`)
         : el('td', { class: 'miss' }, `— unknown ${flags}`));
   }
 
