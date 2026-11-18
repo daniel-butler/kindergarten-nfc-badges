@@ -33,7 +33,10 @@ async function xcodebuild(args, env = {}) {
     await run('xcodebuild', all, { env: { ...process.env, ...env }, maxBuffer: 64 * 1024 * 1024 });
   } catch (e) {
     const out = `${e.stdout ?? ''}\n${e.stderr ?? ''}`;
-    const failures = out.split('\n').filter((l) => /error|failed|XCTAssert/i.test(l)).slice(-25).join('\n');
+    const lines = out.split('\n');
+    // The Swift assertion line says what went wrong; simulator log noise also says "failed".
+    const asserts = lines.filter((l) => /\.swift:\d+: error/.test(l));
+    const failures = (asserts.length ? asserts : lines.filter((l) => /error|failed|XCTAssert/i.test(l)).slice(-25)).join('\n');
     throw new Error(`xcodebuild ${args[0]} failed:\n${failures || out.slice(-4000)}`);
   }
 }
