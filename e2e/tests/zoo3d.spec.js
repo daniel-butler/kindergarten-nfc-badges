@@ -1,6 +1,6 @@
 const { test, expect } = require('@playwright/test');
 const {
-  STAR_SPECIAL, getCards, PENGUIN, LION, FOX_TRICK, manyCards, command, setCards, phoneTap, openScene, reloadPage, scene,
+  STAR_SPECIAL, getCards, PENGUIN, LION, FOX_TRICK, manyCards, command, setCards, phoneTap, openScene, reloadPage, scene, uploadImage,
 } = require('./helpers');
 
 const OWL_AWAY = { canonical_id: '04BEEFBEEFBEEF', emoji: '🦉', label: 'Owl', color: { hex: '#8D6E63', name: 'Brown' }, away: true };
@@ -94,6 +94,18 @@ test('the party: balloons rise and the goose dances before the title shows', asy
   expect((await zooState(page)).gatekeeper).toBe('dancing');
   await expect(page.locator('.zoo3d-finale')).toHaveCount(0);
   await expect(page.locator('.zoo3d-finale')).toContainText('Congratulations, Official Zookeepers!', { timeout: 10000 });
+});
+
+test('a new sticker photo arriving while that animal walks in: it still ends up playing, not stuck in the ground', async ({ page, request }) => {
+  await openScene(page, 'zoo', 4);
+  await phoneTap(request, PENGUIN.canonical_id);
+  await expect.poll(async () => (await zooState(page)).queued).toBe(0); // walking in now
+  await uploadImage(request, PENGUIN.canonical_id); // e.g. the photo is retaken (or cleaned) right now
+  await expect.poll(() => inside(page), { timeout: 15000 }).toContain(PENGUIN.canonical_id);
+  await page.waitForTimeout(1500);
+  const heights = await page.evaluate(() => window.Badge.current.state().heights);
+  expect(heights[PENGUIN.canonical_id]).toBeGreaterThan(1); // standing on the ground, not half under it
+  expect((await zooState(page)).sprites).toBe(1);
 });
 
 test('a not-here-today kid who taps goes in and adds a mark', async ({ page, request }) => {
@@ -339,7 +351,8 @@ test.describe('special badge finale', () => {
     await expect.poll(() => inside(page), { timeout: 15000 }).toContain(PENGUIN.canonical_id);
     await tapStar(request);
     await page.keyboard.press('Alt+a');
-    await expect.poll(async () => (await zooState(page)).models.clipboard).toBe(true); // the goose holds up its clipboard
+    // The goose holds up its clipboard once the special's turn-away moment (about 3 s) is done.
+    await expect.poll(async () => (await zooState(page)).models.clipboard, { timeout: 10000 }).toBe(true);
     const list = page.locator('.zoo-list');
     await expect(list).toBeVisible();
     await expect(list).toContainText('📋 Zoo List');
