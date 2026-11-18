@@ -1,6 +1,6 @@
 const { test, expect } = require('@playwright/test');
 const {
-  command, reloadPage, uploadImage, getCards, PENGUIN, LION, FOX_TRICK, manyCards, setCards, phoneTap, openScene, readerScan, scene,
+  STAR_SPECIAL, command, reloadPage, uploadImage, getCards, PENGUIN, LION, FOX_TRICK, manyCards, setCards, phoneTap, openScene, readerScan, scene,
 } = require('./helpers');
 
 const slot = (page, card) => page.locator(`.zoo-slot.filled[data-id="${card.canonical_id}"]`);
@@ -34,6 +34,21 @@ test.describe('Zoo Gate (backup, ⌥6)', () => {
     await page.keyboard.press('Alt+y');
     await expect(tally(page, 1)).toBeVisible();
     await expect(slot(page, FOX_TRICK)).toBeVisible({ timeout: 5000 });
+  });
+
+  test('the special badge finale works in the backup too', async ({ page, request }) => {
+    await setCards(request, [PENGUIN, STAR_SPECIAL]);
+    await command(request, 'reset');
+    await openScene(page, 'gate', 2);
+    await phoneTap(request, STAR_SPECIAL.canonical_id);
+    await expect(page.locator('.zoo-special-denied')).toBeVisible();
+    await expect(tally(page, 0)).toBeVisible();
+    await page.keyboard.press('Alt+a');
+    await expect(page.locator('.zoo-list-new')).toBeVisible();
+    await page.waitForTimeout(1600); // same badge again within 1.5 s counts as a repeat
+    await phoneTap(request, STAR_SPECIAL.canonical_id);
+    await expect(tally(page, 1)).toBeVisible();
+    await expect(scene(page)).toContainText('Congratulations, Official Zookeepers!', { timeout: 20000 });
   });
 
   test('Option+S opens the gate, parades, and congratulates', async ({ page, request }) => {

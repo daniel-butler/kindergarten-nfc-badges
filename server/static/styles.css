@@ -720,3 +720,80 @@ body.kid-mode .scene-who.nope .title, body.kid-mode .scene-who.nope .big-label {
 @keyframes goose-honk { to { transform: rotate(-8deg) scale(1.05); } }
 @keyframes wave { from { transform: rotate(-20deg); } to { transform: rotate(25deg); } }
 .goose-text { font-size: 9vmin; color: var(--ink); text-shadow: 0 0.6vmin 0 #fff; }
+
+/* ---------- zoo: special badge denial and the Zoo List ---------- */
+
+.zoo-special-denied {
+  position: absolute;
+  inset: 0;
+  z-index: 11;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  background: rgba(217, 245, 255, 0.7);
+}
+.denied-row { display: flex; align-items: center; gap: 5vmin; }
+.peek { animation: peek 1.2s ease-in-out infinite alternate; }
+@keyframes peek { from { transform: translateX(-3vmin) rotate(-6deg); } to { transform: translateX(2vmin) rotate(4deg); } }
+.big-lock { font-family: var(--emoji); font-size: 24vmin; animation: lock-wobble 0.25s ease-in-out infinite alternate; }
+@keyframes lock-wobble { from { transform: rotate(-12deg); } to { transform: rotate(12deg); } }
+.goose.no-no { animation: no-no 0.22s ease-in-out 10 alternate; }
+@keyframes no-no { from { transform: translateX(-2vmin) rotate(-6deg); } to { transform: translateX(2vmin) rotate(6deg); } }
+
+.zoo-list {
+  position: absolute;
+  inset: 0;
+  z-index: 11;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(29, 34, 81, 0.35);
+}
+.zoo-list-paper {
+  width: min(150vmin, 92vw);
+  max-height: 86vh;
+  padding: 3vmin 4vmin 5vmin;
+  border-radius: 3vmin;
+  border: 0.8vmin solid var(--ink);
+  background: repeating-linear-gradient(#fffdf5 0 8.6vmin, #bde0fe 8.6vmin 9vmin);
+  box-shadow: 0 2vmin 0 rgba(0, 0, 0, 0.2);
+  overflow: hidden;
+}
+.zoo-list-title { font-size: 8vmin; text-align: center; color: var(--ink); margin-bottom: 2vmin; }
+.zoo-list-grid { display: flex; flex-wrap: wrap; gap: 2vmin; justify-content: center; }
+.zoo-list-item { position: relative; width: 14vmin; height: 14vmin; display: flex; align-items: center; justify-content: center; }
+.zoo-list-item .sticker { height: 13vmin; }
+.zoo-list-item .emoji-art { font-size: 10vmin; }
+.zoo-list-empty { font-family: var(--emoji); font-size: 10vmin; opacity: 0.3; }
+.zoo-list-new { width: 18vmin; height: 18vmin; }
+.zoo-list-new .sticker, .zoo-list-new .emoji-art { animation: list-appear 0.5s ease-out 1.3s both; }
+.zoo-list-new .sticker { height: 16vmin; }
+.zoo-list-new .emoji-art { font-size: 13vmin; }
+@keyframes list-appear { from { transform: scale(0.2); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+.scribble { position: absolute; inset: -2vmin; width: calc(100% + 4vmin); height: calc(100% + 4vmin); pointer-events: none; }
+.scribble-path {
+  fill: none;
+  stroke: #e8590c;
+  stroke-width: 5;
+  stroke-linecap: round;
+  stroke-dasharray: 420;
+  stroke-dashoffset: 420;
+  animation: scribble 1.4s ease-in-out 0.2s forwards;
+}
+@keyframes scribble { to { stroke-dashoffset: 0; } }
+.pencil {
+  position: absolute;
+  right: -5vmin;
+  top: -5vmin;
+  font-family: var(--emoji);
+  font-size: 9vmin;
+  animation: pencil-move 1.4s ease-in-out 0.2s both;
+}
+@keyframes pencil-move {
+  0% { transform: translate(-14vmin, 6vmin) rotate(0); }
+  25% { transform: translate(-4vmin, -2vmin) rotate(-15deg); }
+  50% { transform: translate(-10vmin, 10vmin) rotate(10deg); }
+  75% { transform: translate(-2vmin, 4vmin) rotate(-10deg); }
+  100% { transform: translate(0, 0) rotate(0); opacity: 0.85; }
+}

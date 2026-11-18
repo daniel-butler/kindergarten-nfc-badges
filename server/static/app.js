@@ -117,6 +117,10 @@ const Sound = (() => {
       tone(520, 0, 0.14, { type: 'sine', gain: 0.18, slideTo: 400 });
       tone(400, 0.13, 0.18, { type: 'sine', gain: 0.15, slideTo: 330 });
     },
+    /** Pencil scribbling on the Zoo List. */
+    scribble() {
+      for (let i = 0; i < 10; i++) tone(900 + (i % 3) * 140, 0.3 + i * 0.09, 0.05, { type: 'square', gain: 0.03 });
+    },
     /** Curious "hmm?" for a vote. */
     wonder() {
       tone(392, 0, 0.22, { type: 'triangle', gain: 0.2 });
@@ -882,7 +886,7 @@ const ZooStore = (() => {
   };
 })();
 
-/** What a tap means in a zoo scene: 'unknown' | 'inside' | 'vote' | 'kept-out' | 'enter'. */
+/** What a tap means in a zoo scene: 'unknown' | 'inside' | 'vote' | 'kept-out' | 'special-denied' | 'enter'. */
 function zooDecide(state, card) {
   if (!card) return 'unknown';
   if (state.checkedIn.includes(card.canonical_id) && !card.away) return 'inside';
@@ -891,6 +895,7 @@ function zooDecide(state, card) {
     if (verdict === 'out') return 'kept-out';
     if (verdict !== 'in') return 'vote';
   }
+  if (card.role === 'special' && !card.allowed) return 'special-denied';
   return 'enter';
 }
 
@@ -956,6 +961,41 @@ function zooGoose(root, card) {
   setTimeout(() => overlay.remove(), 2600);
 }
 
+/** Special badge before it's allowed: it peeks at the gate, the goose says no, the padlock wobbles. */
+function zooSpecialDenied(root, card) {
+  root.querySelector('.zoo-special-denied')?.remove();
+  const overlay = el('div', { class: 'zoo-special-denied' },
+    el('div', { class: 'denied-row' },
+      el('div', { class: 'peek' }, cardArt(card, 26)),
+      el('div', { class: 'big-lock' }, '🔒'),
+      el('div', { class: 'goose no-no' }, '🪿')));
+  root.append(overlay);
+  Sound.honk();
+  setTimeout(() => Sound.silly(), 550);
+  setTimeout(() => overlay.remove(), 3200);
+}
+
+function scribbleMark() {
+  const svg = svgEl('svg', { viewBox: '0 0 100 100', class: 'scribble', 'aria-hidden': 'true' });
+  svg.append(svgEl('path', { d: 'M12 58 C 18 12, 84 8, 90 48 S 34 96, 14 62 S 40 20, 70 30', class: 'scribble-path' }));
+  return [svg, el('span', { class: 'pencil' }, '✏️')];
+}
+
+/** The Zoo List: everyone inside, plus allowed special badges (scribbled in when `scribble`). */
+function zooListOverlay(state, scribble) {
+  const byId = (id) => Badge.cards.find((c) => c.canonical_id === id);
+  const inside = state.checkedIn.map(byId).filter((c) => c && !c.away);
+  const added = Badge.cards.filter((c) => c.role === 'special' && c.allowed && !state.checkedIn.includes(c.canonical_id));
+  return el('div', { class: 'zoo-list' },
+    el('div', { class: 'zoo-list-paper' },
+      el('div', { class: 'zoo-list-title' }, '📋 Zoo List'),
+      el('div', { class: 'zoo-list-grid' },
+        inside.map((c) => el('div', { class: 'zoo-list-item', 'data-id': c.canonical_id }, cardArt(c, null))),
+        added.map((c) => el('div', { class: `zoo-list-item ${scribble ? 'zoo-list-new' : ''}`, 'data-id': c.canonical_id },
+          cardArt(c, null), scribble ? scribbleMark() : null)),
+        inside.length + added.length ? null : el('div', { class: 'zoo-list-empty' }, '🐾'))));
+}
+
 /**
  * Tap rules shared by both zoo scenes. Hooks: root(), state(), enter(card), inside(card),
  * tallyChanged(), party(), reset().
@@ -964,7 +1004,18 @@ function createZooFlow(h) {
   let pending = null; // trick card waiting for the class vote
   let deferred = []; // taps that arrived during the vote
 
+  function showList(scribble) {
+    const root = h.root();
+    root.querySelector('.zoo-list')?.remove();
+    root.append(zooListOverlay(h.state(), scribble));
+    if (scribble) {
+      Sound.scribble();
+      setTimeout(() => Sound.chime(), 1500);
+    }
+  }
+
   function tap(ev) {
+    h.root().querySelector('.zoo-list')?.remove();
     if (pending) {
       if (ev.card) deferred.push(ev);
       else zooRetry(h.root());
@@ -976,6 +1027,7 @@ function createZooFlow(h) {
       case 'unknown': return zooRetry(h.root());
       case 'inside': return h.inside(card);
       case 'kept-out': return zooGoose(h.root(), card);
+      case 'special-denied': return zooSpecialDenied(h.root(), card);
       case 'vote':
         pending = card;
         h.root().append(zooVoteOverlay(card));
@@ -1021,6 +1073,11 @@ function createZooFlow(h) {
       if (action === 'let-in') decide(true);
       else if (action === 'keep-out') decide(false);
       else if (action === 'party') h.party();
+      else if (action === 'allow-special') showList(true);
+      else if (action === 'toggle-list') {
+        if (h.root().querySelector('.zoo-list')) h.root().querySelector('.zoo-list').remove();
+        else showList(false);
+      }
       else if (action === 'reset') {
         pending = null;
         deferred = [];
@@ -1255,7 +1312,10 @@ Badge.registerScene((() => {
   const flow = createZooFlow({
     root: () => root,
     state: () => state,
-    enter: (card) => walkIn(card, insideCards().length - 1),
+    enter(card) {
+      walkIn(card, insideCards().length - 1);
+      if (card.role === 'special') Badge.later(openGate, WALK_MS + 600);
+    },
     inside(card) {
       Sound.tick(4);
       bounce(slots.find((s) => s.dataset.id === card.canonical_id));
@@ -1296,6 +1356,8 @@ Badge.registerScene((() => {
       tally: state.tally,
       finale: state.open,
       pendingVote: flow.pendingVote,
+      specialDenied: !!root.querySelector('.zoo-special-denied'),
+      listOpen: !!root.querySelector('.zoo-list'),
     }),
     onTap(ev) {
       if (state.open && ev.card) {
@@ -1952,6 +2014,7 @@ Badge.registerScene((() => {
     while (queue.length && w) {
       const card = queue.shift();
       await arrive(card);
+      if (card.role === 'special' && w) Badge.later(startParty, PARTY_DELAY_MS);
     }
     busy = false;
   }
@@ -2108,6 +2171,8 @@ Badge.registerScene((() => {
     onTap: (ev) => flow.tap(ev),
     state: () => ({
       pendingVote: flow.pendingVote,
+      specialDenied: !!root.querySelector('.zoo-special-denied'),
+      listOpen: !!root.querySelector('.zoo-list'),
       inside: [...animals.values()].filter((a) => a.arrived).map((a) => a.card.canonical_id),
       queued: queue.length,
       finale,

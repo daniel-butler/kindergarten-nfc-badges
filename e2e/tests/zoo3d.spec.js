@@ -1,6 +1,6 @@
 const { test, expect } = require('@playwright/test');
 const {
-  PENGUIN, LION, FOX_TRICK, manyCards, command, setCards, phoneTap, openScene, reloadPage, scene,
+  STAR_SPECIAL, getCards, PENGUIN, LION, FOX_TRICK, manyCards, command, setCards, phoneTap, openScene, reloadPage, scene,
 } = require('./helpers');
 
 const OWL_AWAY = { canonical_id: '04BEEFBEEFBEEF', emoji: '🦉', label: 'Owl', color: { hex: '#8D6E63', name: 'Brown' }, away: true };
@@ -228,6 +228,72 @@ test.describe('trick badge votes', () => {
     await page.keyboard.press('Alt+y');
     await expect(page.locator('#banner')).toContainText('Nothing is waiting');
     expect(await zooState(page)).toMatchObject({ tally: 0, inside: [] });
+  });
+});
+
+test.describe('special badge finale', () => {
+  test.beforeEach(async ({ request }) => {
+    await setCards(request, [PENGUIN, LION, FOX_TRICK, OWL_AWAY, STAR_SPECIAL]);
+    await command(request, 'reset');
+  });
+  const tapStar = (request) => phoneTap(request, STAR_SPECIAL.canonical_id);
+
+  test('before Allow: silly denial with the goose and the padlock; nobody goes in', async ({ page, request }) => {
+    await openScene(page, 'zoo', 5);
+    await tapStar(request);
+    const denied = page.locator('.zoo-special-denied');
+    await expect(denied).toBeVisible();
+    await expect(denied).toContainText('🪿');
+    await expect(denied).toContainText('🔒');
+    await expect(denied).toContainText('⭐');
+    expect(await zooState(page)).toMatchObject({ specialDenied: true, inside: [], tally: 0, finale: false });
+  });
+
+  test('Option+A shows the Zoo List with everyone inside and scribbles the special in', async ({ page, request }) => {
+    await openScene(page, 'zoo', 5);
+    await phoneTap(request, PENGUIN.canonical_id);
+    await expect.poll(() => inside(page), { timeout: 15000 }).toContain(PENGUIN.canonical_id);
+    await tapStar(request);
+    await page.keyboard.press('Alt+a');
+    const list = page.locator('.zoo-list');
+    await expect(list).toBeVisible();
+    await expect(list).toContainText('📋 Zoo List');
+    await expect(list.locator(`.zoo-list-item[data-id="${PENGUIN.canonical_id}"]`)).toBeVisible();
+    await expect(list.locator(`.zoo-list-new[data-id="${STAR_SPECIAL.canonical_id}"]`)).toBeVisible();
+    expect((await zooState(page)).listOpen).toBe(true);
+    await expect.poll(async () => (await getCards(request)).find((c) => c.role === 'special').allowed).toBe(true);
+  });
+
+  test('the allowed special closes the list, goes in with a mark, and starts the party', async ({ page, request }) => {
+    await openScene(page, 'zoo', 5);
+    await phoneTap(request, PENGUIN.canonical_id);
+    await expect(tally(page, 1)).toBeVisible();
+    await command(request, 'allow-special');
+    await expect(page.locator('.zoo-list')).toBeVisible();
+    await tapStar(request);
+    await expect(page.locator('.zoo-list')).toHaveCount(0);
+    await expect(tally(page, 2)).toBeVisible();
+    await expect(page.locator('.zoo3d-finale')).toContainText('Congratulations, Official Zookeepers!', { timeout: 20000 });
+    expect(await inside(page)).toContain(STAR_SPECIAL.canonical_id);
+  });
+
+  test('Option+L shows and hides the Zoo List', async ({ page }) => {
+    await openScene(page, 'zoo', 5);
+    await page.keyboard.press('Alt+l');
+    await expect(page.locator('.zoo-list')).toBeVisible();
+    await page.keyboard.press('Alt+l');
+    await expect(page.locator('.zoo-list')).toHaveCount(0);
+  });
+
+  test('reset sends the special back to denied', async ({ page, request }) => {
+    await openScene(page, 'zoo', 5);
+    await command(request, 'allow-special');
+    await expect(page.locator('.zoo-list')).toBeVisible();
+    await resetKeys(page);
+    await expect.poll(async () => (await getCards(request)).find((c) => c.role === 'special').allowed).toBe(false);
+    await tapStar(request);
+    await expect(page.locator('.zoo-special-denied')).toBeVisible();
+    expect((await zooState(page)).tally).toBe(0);
   });
 });
 
