@@ -47,7 +47,7 @@ directly.
 
 ## Badge roles
 
-Set a role when registering a badge, in Zoo Tap's **Register** tab or in **⌥1 Setup**.
+Set a role when registering a badge, in Zookeeper's **Register** tab or in **⌥1 Setup**.
 
 - **Normal:** walks into the zoo and adds a tally mark.
 - **🎭 Trick:** the stored animal or color is deliberately wrong (photograph a spare sticker for
@@ -133,7 +133,7 @@ gentle retry. **⌥S** skips. Every present card is asked once before any repeat
 The **presenter panel** (**⌥P**) has the zoo buttons, **💤 Everyone's here** (clears every 💤), and
 the last unknown badge's ID.
 
-## The phone remote (Zoo Tap → Presenter)
+## The phone remote (Zookeeper → Presenter)
 
 <img src="images/phone-presenter.jpg" alt="Presenter tab" width="260" align="right">
 
@@ -166,8 +166,8 @@ everything in **⌥0 Debug**.
 **The night before**
 - [ ] `cargo build --release`, and keep `server/target/release/badge-server` somewhere safe.
 - [ ] Start it with `--cards ~/cards.json` (photos are saved in `~/images/`).
-- [ ] Zoo Tap is on the iPhone (reinstall from Xcode if it won't open).
-- [ ] Zoo Tap → **Register**: scan each badge, snap its sticker, name it, and pick its cardstock
+- [ ] Zookeeper is on the iPhone (reinstall from Xcode if it won't open).
+- [ ] Zookeeper → **Register**: scan each badge, snap its sticker, name it, and pick its cardstock
       color and role. Three 🎭 trick badges (photograph a spare sticker for them) and one ⭐ special.
 - [ ] Tap every badge on the **USB reader** with ⌥1 Setup open. For any that show the picker
       instead of the card: tap it on the phone, then on the reader within 5 s, to link them.
@@ -186,8 +186,8 @@ everything in **⌥0 Debug**.
 - [ ] Projector volume up; ⌥P → Chime plays.
 - [ ] ⌥P shows 🟢 Connected and the right card count. Press **💤 Everyone's here** if any 💤 are
       left over from last time.
-- [ ] Zoo Tap → **Register**: scan each badge you're holding back → **💤 Not here today**.
-- [ ] Zoo Tap → **Check in**: server URL set, **Test connection** shows ✅, Start Scanning. One test
+- [ ] Zookeeper → **Register**: scan each badge you're holding back → **💤 Not here today**.
+- [ ] Zookeeper → **Check in**: server URL set, **Test connection** shows ✅, Start Scanning. One test
       tap shows in ⌥0 Debug as 📱 phone.
 - [ ] Reader: one test tap shows as ⌨️ reader. Typing test mode is **off**.
 - [ ] **Reset** (phone, or ⌥R twice) right before the kids start.

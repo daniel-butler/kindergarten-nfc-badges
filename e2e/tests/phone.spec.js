@@ -1,4 +1,4 @@
-// Phone + page together: Zoo Tap runs in the iOS simulator (XCUITest presses its real buttons)
+// Phone + page together: Zookeeper runs in the iOS simulator (XCUITest presses its real buttons)
 // against the same server as the projector page. Needs Xcode; run with `npm run test:phone`.
 const path = require('node:path');
 const { execFile } = require('node:child_process');

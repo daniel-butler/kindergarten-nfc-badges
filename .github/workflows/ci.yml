@@ -63,7 +63,7 @@ jobs:
           node-version: 22
           cache: npm
           cache-dependency-path: e2e/package-lock.json
-      - name: Phone + page e2e (Zoo Tap in the simulator)
+      - name: Phone + page e2e (Zookeeper in the simulator)
         working-directory: e2e
         run: |
           npm ci

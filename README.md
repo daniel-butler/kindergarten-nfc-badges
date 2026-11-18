@@ -30,11 +30,11 @@ the computer looking it up, and a **Who has the 🐼?** game.
 
 ## What the presenter uses
 
-<img src="docs/images/phone-presenter.jpg" alt="Zoo Tap's Presenter tab on an iPhone" width="260" align="right">
+<img src="docs/images/phone-presenter.jpg" alt="Zookeeper's Presenter tab on an iPhone" width="260" align="right">
 
 - **A Mac** runs everything offline and drives the projector.
 - **A USB badge reader** and/or **an iPhone** read the badges.
-- **Zoo Tap**, the iPhone app, registers badges (it photographs each sticker and cuts it out
+- **Zookeeper**, the iPhone app, registers badges (it photographs each sticker and cuts it out
   automatically) and is your **remote**: Let in / Keep out, Allow special, Zoo List, Party,
   scene switching, and a Help sheet with every Mac shortcut as a fallback.
 
@@ -57,7 +57,7 @@ No hardware yet? Press **⌥T** and type a badge ID, or `curl` a tap; see the
 
 - 🎤 **[Presenter guide](docs/presenter-guide.md)**: lesson flow, every scene, keyboard shortcuts,
   the phone remote, and a pre-class checklist.
-- 🛠️ **[Setup guide](docs/setup.md)**: running the server, the iPhone hotspot, installing Zoo Tap,
+- 🛠️ **[Setup guide](docs/setup.md)**: running the server, the iPhone hotspot, installing Zookeeper,
   and registering badges with sticker photos.
 - 👩‍💻 **[Developer guide](docs/developer.md)**: how it's built, the HTTP API, badge ID matching,
   tests, and adding your own scene.

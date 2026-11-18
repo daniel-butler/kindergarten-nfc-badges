@@ -3,11 +3,11 @@
 <plist version="1.0">
 <dict>
 	<key>NFCReaderUsageDescription</key>
-	<string>Zoo Tap reads the secret number inside each zookeeper badge.</string>
+	<string>Zookeeper reads the secret number inside each zookeeper badge.</string>
 	<key>NSCameraUsageDescription</key>
-	<string>Zoo Tap photographs each badge's sticker so it can walk into the zoo.</string>
+	<string>Zookeeper photographs each badge's sticker so it can walk into the zoo.</string>
 	<key>NSLocalNetworkUsageDescription</key>
-	<string>Zoo Tap sends badge taps to the Classroom Zoo server on your Mac.</string>
+	<string>Zookeeper sends badge taps to the Classroom Zoo server on your Mac.</string>
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSAllowsArbitraryLoads</key>
