@@ -190,7 +190,7 @@ If something odd happens during class, the full story (server, projector page an
 - [ ] ⌥P shows 🟢 Connected and the right card count. Press **💤 Everyone's here** if any 💤 are
       left over from last time.
 - [ ] Zookeeper → **Register**: scan each badge you're holding back → **💤 Not here today**.
-- [ ] Zookeeper → **Check in**: server URL set, **Test connection** shows ✅, Start Scanning. One test
+- [ ] Zookeeper → **Check in**: server URL set, it shows 🟢 Connected, Start Scanning. One test
       tap shows in ⌥0 Debug as 📱 phone.
 - [ ] Reader: one test tap shows as ⌨️ reader. Typing test mode is **off**.
 - [ ] **Reset** (phone, or ⌥R twice) right before the kids start.

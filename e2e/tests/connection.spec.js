@@ -1,35 +1,7 @@
 // The projector page's live connection to the server, through a relay the test can cut, so a
 // network blip, a sleeping Mac or a restarted server can be replayed. Runs in Chrome and Firefox.
-const net = require('node:net');
 const { test, expect } = require('@playwright/test');
-const { PENGUIN, LION, setCards, phoneTap, command, logLines } = require('./helpers');
-
-const SERVER_PORT = 8181;
-
-/** A TCP relay in front of the server: `cut()` drops every open connection, `down()` refuses new ones. */
-function relay() {
-  const sockets = new Set();
-  let refusing = false;
-  const server = net.createServer((client) => {
-    if (refusing) return client.destroy();
-    const upstream = net.connect(SERVER_PORT, '127.0.0.1');
-    for (const s of [client, upstream]) {
-      sockets.add(s);
-      s.on('close', () => sockets.delete(s));
-      s.on('error', () => {});
-    }
-    client.pipe(upstream).pipe(client);
-    client.on('close', () => upstream.destroy());
-    upstream.on('close', () => client.destroy());
-  });
-  return {
-    start: () => new Promise((ok) => server.listen(0, '127.0.0.1', () => ok(server.address().port))),
-    cut: () => sockets.forEach((s) => s.destroy()),
-    down() { refusing = true; this.cut(); },
-    up() { refusing = false; },
-    stop: () => new Promise((ok) => { sockets.forEach((s) => s.destroy()); server.close(ok); }),
-  };
-}
+const { PENGUIN, LION, setCards, phoneTap, command, logLines, relay } = require('./helpers');
 
 const connected = (page) => page.evaluate(() => window.Badge.connected);
 const tally = (page, n) => page.locator(`.zoo-tally[data-count="${n}"]`);

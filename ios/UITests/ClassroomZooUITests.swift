@@ -67,6 +67,39 @@ final class ClassroomZooUITests: XCTestCase {
         XCTAssert(text(app, "✓ Sent: reset").waitForExistence(timeout: wait))
     }
 
+    private func label(_ app: XCUIElement, startingWith prefix: String) -> XCUIElement {
+        app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", prefix)).firstMatch
+    }
+
+    func testShowsConnectedToTheMac() {
+        let app = launch(mode: "Check in")
+        XCTAssert(label(app, startingWith: "🟢 Connected").waitForExistence(timeout: wait))
+    }
+
+    /// The Mac is unreachable at first (the Playwright side brings it back after a while):
+    /// the app says so, and Reconnect gets it back.
+    func testReconnectsWhenTheMacComesBack() {
+        let app = launch(mode: "Presenter")
+        XCTAssert(label(app, startingWith: "🔴 Can't reach the Mac").waitForExistence(timeout: wait))
+        let connected = label(app, startingWith: "🟢 Connected")
+        let deadline = Date().addingTimeInterval(60)
+        while !connected.exists && Date() < deadline {
+            if app.buttons["Reconnect"].exists { app.buttons["Reconnect"].tap() }
+            _ = connected.waitForExistence(timeout: 2)
+        }
+        XCTAssert(connected.exists, "connected again after Reconnect")
+    }
+
+    func testLogsCanBeCopied() {
+        let app = launch(mode: "Check in")
+        app.buttons["Logs"].tap()
+        let line = app.staticTexts.matching(NSPredicate(format: "label CONTAINS 'app active'")).firstMatch
+        XCTAssert(line.waitForExistence(timeout: wait), "the log shows what the app did")
+        app.buttons["Copy"].tap()
+        XCTAssert(app.buttons["Copied ✓"].waitForExistence(timeout: wait))
+        XCTAssert(app.buttons["Share"].exists, "the log can be shared as a file")
+    }
+
     func testRegisterMarksAway() {
         let app = launch(mode: "Register")
         app.buttons["📛 Scan a badge to register"].tap()
