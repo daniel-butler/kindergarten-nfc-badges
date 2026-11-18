@@ -32,7 +32,6 @@ deletes), so pass `--cards` for the real registry.
    `badge-server` incoming connections; the first launch usually asks.
 
 The projector page uses `http://localhost:8080/` on the Mac, so it works even without the hotspot.
-Speech uses the Mac's built-in voices, which work offline.
 
 ## iPhone app (Zoo Tap)
 
@@ -45,9 +44,23 @@ Speech uses the Mac's built-in voices, which work offline.
    (Settings → General → VPN & Device Management).
 3. In the app: enter the server URL printed by the server (e.g. `http://172.20.10.2:8080`), tap
    **Test connection** (allow Local Network access when asked) → "✅ Connected: N badges".
-4. Tap **Start Scanning** and hold badges to the top of the phone one after another. Each read
-   buzzes, POSTs `{id, source: "phone"}`, shows the animal, and keeps scanning. iOS ends an NFC
-   session after about a minute; tap Start again.
+4. **Check in** mode: tap **Start Scanning** and hold badges to the top of the phone one after
+   another. Each read buzzes, POSTs `{id, source: "phone"}`, shows the animal, and keeps
+   scanning. iOS ends an NFC session after about a minute; tap Start again.
+
+**Register mode** (one badge at a time, ~20 s each):
+1. **Scan a badge to register**, hold the badge to the phone.
+2. New badge: the camera opens. Snap the sticker straight on; the app lifts it off the cardstock
+   automatically (checkerboard = transparent). **Retake** if the edges look wrong.
+3. Type the animal's name (e.g. "Panda"), tap its cardstock color, flip **🎭 Trick badge** if
+   needed, **Save**. The photo shows up on the projector right away.
+4. A badge that's already registered shows its photo with **📸 Retake photo**, **✏️ Edit** and
+   **💤 Not here today**. Flip 💤 for every badge you're holding back (absent kids): those
+   animals leave the count, the party, and Who has the ___?. Tapping that badge later checks
+   it in as normal.
+
+Trick badges: photograph a *different* (spare) sticker and/or pick a different color, then flip
+🎭 so it doesn't count toward "everyone's home".
 
 A badge left on the phone isn't re-sent within 2 seconds. Without a phone, check the networking
 code on the Mac:
@@ -69,47 +82,50 @@ Presenter keys always use **Option** so the reader can never trigger them:
 |-----|--------|
 | ⌥1 | Setup (presenter only) |
 | ⌥2 | Secret Number |
-| ⌥3 | Zoo Gate (main scene) |
+| ⌥3 | Zoo playground, 3D (main scene) |
 | ⌥4 | The List |
 | ⌥5 | Who has the ___? |
+| ⌥6 | Zoo Gate, 2D (backup if 3D misbehaves) |
 | ⌥0 | Debug (presenter only) |
-| ⌥S | Scene action: open the gate now / next animal |
+| ⌥S | Scene action: start the party / next animal |
 | ⌥P | Presenter panel (also: click the invisible top-right corner) |
 | ⌥F | Fullscreen |
 | ⌥M | Mute all sound |
-| ⌥V | Voice on/off |
 | ⌥T | Typing test mode: accept hand-typed hex (normally ignored as too slow) |
 
-`#setup`, `#secret`, `#zoo`, `#list`, `#who`, `#debug` in the URL open that scene directly.
+`#setup`, `#secret`, `#zoo`, `#list`, `#who`, `#gate`, `#debug` in the URL open that scene directly.
 
 ### Scenes
 
-Kid scenes use a bright sky theme, big emoji, and a spoken voice (most kindergarteners can't
-read yet). Setup and Debug stay dark.
+Kid scenes use a bright sky theme, the real sticker photos (emoji when a badge has no photo yet),
+and sound effects. There is no spoken voice. Setup and Debug stay dark.
 
 - **Setup**: tap a badge. Unknown → pick an animal and cardstock color → Save. Known → shows it,
   with ✏️ Change / 🗑️ Delete. Click an animal in the bottom strip to edit it. **🎭 Trick** marks a
   badge whose stored animal/color deliberately doesn't match the physical badge. Link mode is on
   only while this scene is open. Duplicate badges get a full-screen red warning.
 - **Secret Number**: any tap, known or not, reveals the raw ID digit by digit on rainbow tiles
-  while the voice reads each digit, then a chime.
-- **Zoo Gate**: a locked gate. Each check-in walks that animal through the gate into the zoo
-  with confetti in its cardstock color, a chime, and "Welcome, Penguin keeper!". The counter and
-  progress bar count only non-trick badges. Unknown badge → ACCESS DENIED. When every non-trick
-  badge is in (or on ⌥S) the gate opens with a fanfare, all animals parade across, and it ends on
-  "Congratulations, Official Zookeepers!". Check-ins survive a page reload;
-  **Reset check-ins** is in the presenter panel.
+  with a tick per digit, then a chime.
+- **Zoo playground (3D, main)**: a tap swoops the camera to the ZOO gate, where that badge's
+  sticker waits. The gate opens with confetti in its cardstock color and a chime, the sticker hops
+  down the path into the playground, its friends bounce with hearts, and it joins the slide,
+  swings, seesaw, merry-go-round or grass (animals rotate every ~12 s). Several taps in a row
+  queue up and arrive faster. Counter: "12 of 18 animals are home" (trick and 💤 badges don't
+  count). Unknown badge → ACCESS DENIED. When everyone present is in (or on ⌥S) the playground
+  parties: fanfare, confetti rain, "Congratulations, Official Zookeepers!". Check-ins survive a
+  reload; **Reset check-ins** is in the presenter panel.
+- **Zoo Gate (2D backup, ⌥6)**: the earlier flat version; shares the same check-ins.
 - **The List**: every registered card with its secret number, animal and color swatch. A tap shows
   the tapped number, visibly scans down the list, then highlights and enlarges the matching row
-  ("Found it! Penguin!").
-- **Who has the ___?**: "Who has the 🐧 Penguin?" Right badge → confetti in its color and
-  "Yes!"; the next animal comes up after 4 seconds. Wrong badge → silly buzzer and "Nope!
-  That's the Lion!". ⌥S skips. Every card gets asked once before any repeats.
+  and 💤 badges faded.
+- **Who has the ___?**: shows one animal: "Who has the Panda?" Right badge → confetti in its
+  color and "Yes!"; the next animal comes up after 4 seconds. Wrong badge → silly buzzer and
+  "Nope! That's the Lion". ⌥S skips. Every present card is asked once before any repeats.
 - **Debug**: live log of every tap (source, raw_id, canonical_id, matched card) plus ignored reader
   input.
 
-**Trick badges** take part everywhere like any other card; they're only left out of the Zoo Gate
-"all checked in" count.
+**Trick badges** take part everywhere like any other card; they're only left out of the zoo's
+"everyone's home" count. **💤 Everyone's here** in the presenter panel clears every 💤.
 
 **Secret Number vs. The List:** Secret Number shows the ID exactly as the device sent it. If the
 USB reader sends a shortened or reversed form, it won't look like the List's number, but The List
@@ -121,7 +137,7 @@ Scenes live in `server/static/app.js`:
 
 ```js
 Badge.registerScene({
-  id: 'myscene', name: '🎈 My scene', key: '6',   // ⌥6
+  id: 'myscene', name: '🎈 My scene', key: '7',   // ⌥7
   kid: true,                                       // bright theme
   onEnter(root, Badge) { /* render into root (full-screen) */ },
   onTap(ev) { /* ev.card is null when unknown; repeats filtered unless acceptRepeats */ },
@@ -132,7 +148,7 @@ Badge.registerScene({
 ```
 
 Helpers on `Badge`: `cards`, `sound.chime() / buzzer() / silly() / fanfare() / tick()`,
-`voice.say(text)`, `confetti.burst(colors) / rain(colors)`, `later(fn, ms)` (auto-cancelled on
+`cardArt(card, sizeVmin)` (sticker photo or emoji), `confetti.burst(colors) / rain(colors)`, `later(fn, ms)` (auto-cancelled on
 scene change), `banner(text)`, `saveCards(cards)`, `ANIMALS`, `COLORS`.
 
 In a debug build (`cargo run`) static files are read from disk, so edit and refresh. A release
@@ -146,10 +162,15 @@ build embeds them in the binary.
 | GET    | `/events`        | SSE. `event: tap` → tap event; `event: cards` → full card list after any change |
 | GET    | `/api/cards`     | card list |
 | PUT    | `/api/cards`     | replace card list. `409` if invalid or the same badge would map to two cards |
+| POST   | `/api/cards`     | create or replace one card by `canonical_id` (keeps aliases/photo when omitted) |
+| GET    | `/api/cards/resolve?id=X` | `{ canonical_id, card }` using the normal matching; not counted as a tap |
+| PUT    | `/api/cards/{id}/image` | `image/png` body, max 5 MB → stored as `images/<id>.png` next to `cards.json` |
+| POST   | `/api/cards/clear-away` | clear 💤 on every card |
+| GET    | `/images/<id>.png` | the sticker photos |
 | GET/PUT| `/api/link-mode` | `{"enabled":true}` turns on alias linking (the Setup scene does this) |
 
 Tap event: `{ raw_id, canonical_id, source, card: Card|null, ts, linked? }`
-Card: `{ canonical_id, aliases: [..], emoji, label, color: { hex: "#1E5BD8", name: "Blue" }, trick }`
+Card: `{ canonical_id, aliases: [..], emoji, label, color: { hex: "#1E5BD8", name: "Blue" }, trick, away, image? }`
 
 ## How IDs match
 
@@ -177,9 +198,9 @@ cd e2e && npm test                                   # starts the server on :818
 
 CI also builds the iOS app for the simulator and runs the TapClient checks on macOS.
 
-The e2e suite covers the HTTP API, SSE, keyboard-wedge capture, every scene (including voice
-lines), the presenter panel, and 720p layouts with 25 badges. CI runs fmt, clippy, unit tests and
-e2e on every push.
+The e2e suite covers the HTTP API (including sticker photos and 💤), SSE, keyboard-wedge
+capture, every scene including the 3D zoo, the presenter panel, and 720p layouts with 25
+badges. CI runs fmt, clippy, unit tests and e2e on every push.
 
 ## Test with no hardware
 
@@ -200,21 +221,25 @@ Press ⌥T again to turn it off. Watch everything in **⌥0 Debug**.
 
 **The night before**
 - [ ] `cargo build --release` and copy `server/target/release/badge-server` somewhere safe.
-- [ ] Install Zoo Tap on the iPhone from Xcode (development builds stay valid for days, but
-      reinstall if it won't open).
-- [ ] Register every badge in Setup (⌥1) with the **phone**; set 🎭 on the three trick badges.
-- [ ] Tap every badge on the **USB reader** in Setup. Any that show the picker instead of the
-      card: tap on the phone, then the reader within 5 s to link them.
-- [ ] Back up `cards.json`.
-- [ ] Dry run: ⌥2 → ⌥3 (check in a few, ⌥S to open, Reset check-ins) → ⌥4 → ⌥5.
+- [ ] Start it with `--cards ~/cards.json` (photos land in `~/images/`).
+- [ ] Zoo Tap is on the iPhone (reinstall from Xcode if it won't open).
+- [ ] Zoo Tap → **Register**: scan each of the 18 badges, snap its sticker, name it, pick its
+      cardstock color. Flip 🎭 on the three trick badges (photograph a spare sticker for them).
+- [ ] Tap every badge on the **USB reader** with Setup (⌥1) open. Any that show the picker
+      instead of the card: tap it on the phone, then the reader within 5 s to link them.
+- [ ] Back up `cards.json` and the `images/` folder.
+- [ ] Dry run: ⌥2 → ⌥3 (check in a few, ⌥S for the party, Reset check-ins) → ⌥4 → ⌥5. Make
+      sure ⌥3 runs smoothly on the Mac; if not, ⌥6 is the 2D backup.
 
 **In the classroom**
 - [ ] Mac on the iPhone hotspot; server running with `--cards ~/cards.json`.
 - [ ] Chrome → `http://localhost:8080/#zoo`, **Click to start**, fullscreen (⌥F).
-- [ ] Projector volume up; ⌥P → Chime and Voice buttons play.
-- [ ] ⌥P status shows 🟢 Connected and the right card count.
-- [ ] Zoo Tap: server URL set, **Test connection** shows ✅, Start Scanning, one test tap shows
-      in ⌥0 Debug as 📱 phone.
+- [ ] Projector volume up; ⌥P → Chime plays.
+- [ ] ⌥P status shows 🟢 Connected and the right card count; **💤 Everyone's here** if last
+      time's 💤 are still set.
+- [ ] Zoo Tap → **Register**, scan each badge you're holding back → **💤 Not here today**.
+- [ ] Zoo Tap → **Check in**: server URL set, **Test connection** shows ✅, Start Scanning; one
+      test tap shows in ⌥0 Debug as 📱 phone.
 - [ ] Reader: one test tap shows as ⌨️ reader. Typing test mode is **off**.
 - [ ] ⌥3 → **Reset check-ins** right before the kids start.
-- [ ] Spare badge for "ACCESS DENIED" demo (any unregistered NFC sticker).
+- [ ] Spare badge for the "ACCESS DENIED" demo (any unregistered NFC sticker).

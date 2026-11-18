@@ -2,6 +2,10 @@
 
 Date: 2026-11-17 · Presentation: Thursday 2026-11-19 · Class: ~18 kindergarteners
 
+> **Update 2026-11-17:** the presenter asked for **no spoken voice at all**. Every voice line
+> below ("Welcome, Panda!", "Access denied!", the finale) is shown as text or carried by sound
+> effects instead; nothing is spoken.
+
 ## Intent
 
 Make the main projector moment feel like walking into a real zoo, game-like and alive.
