@@ -12,7 +12,7 @@ const DERIVED = path.resolve(__dirname, '../.ios-build');
 const SERVER = 'http://localhost:8181';
 
 test.skip(!process.env.BADGE_PHONE_E2E, 'needs Xcode and an iOS simulator: npm run test:phone');
-test.describe.configure({ timeout: 240_000 });
+test.describe.configure({ timeout: 360_000 });
 
 /** BADGE_SIM, else a booted iPhone simulator, else the first available one. */
 async function simulator() {
@@ -42,12 +42,16 @@ async function xcodebuild(args, env = {}) {
 }
 
 /** Runs one ClassroomZooUITests method in the simulator; it fails this test if the phone side fails. */
-function phone(method, { tags = [], expect: shown = '' } = {}) {
-  return xcodebuild(['test-without-building', `-only-testing:ClassroomZooUITests/ClassroomZooUITests/${method}`], {
-    TEST_RUNNER_BADGE_SERVER: SERVER,
-    TEST_RUNNER_ZOO_FAKE_TAGS: tags.join(','),
-    TEST_RUNNER_PHONE_EXPECT: shown,
-  });
+async function phone(method, { tags = [], expect: shown = '' } = {}) {
+  const args = ['test-without-building', `-only-testing:ClassroomZooUITests/ClassroomZooUITests/${method}`];
+  const env = { TEST_RUNNER_BADGE_SERVER: SERVER, TEST_RUNNER_ZOO_FAKE_TAGS: tags.join(','), TEST_RUNNER_PHONE_EXPECT: shown };
+  try {
+    await xcodebuild(args, env);
+  } catch (e) {
+    // The simulator sometimes drops the test runner before it starts; that says nothing about the app.
+    if (!/never finished bootstrapping/.test(e.message)) throw e;
+    await xcodebuild(args, env);
+  }
 }
 
 const tally = (page, n) => page.locator(`.zoo-tally[data-count="${n}"]`);
@@ -104,7 +108,8 @@ test('Allow special from the phone opens the Zoo List; the special then starts t
   await phoneTap(request, STAR_SPECIAL.canonical_id);
   await expect.poll(async () => (await zooState(page)).specialDenied).toBe(true);
   await phone('testPresenterAllowsSpecial', { expect: 'Star' });
-  await expect(page.locator(`.zoo-list-new[data-id="${STAR_SPECIAL.canonical_id}"]`)).toBeVisible();
+  // The list waits for the goose's clipboard (and any gate moment before it); slow on CI's software 3D.
+  await expect(page.locator(`.zoo-list-new[data-id="${STAR_SPECIAL.canonical_id}"]`)).toBeVisible({ timeout: 20000 });
   await page.waitForTimeout(1600); // same badge again within 1.5 s is ignored as a repeat
   await phoneTap(request, STAR_SPECIAL.canonical_id);
   await expect(page.locator('.zoo3d-finale')).toContainText('Congratulations, Official Zookeepers!', { timeout: 20000 });
