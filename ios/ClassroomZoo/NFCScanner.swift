@@ -26,6 +26,12 @@ final class NFCScanner: NSObject, ObservableObject {
     private var onceHandler: ((String) -> Void)?
     private var lastSent: (id: String, at: Date)?
     private let haptics = UINotificationFeedbackGenerator()
+    #if DEBUG
+    /// UI tests run in the simulator, which has no NFC: ZOO_FAKE_TAGS="ID1,ID2" stands in for
+    /// badges held to the phone, read one after another.
+    private var fakeTags = ProcessInfo.processInfo.environment["ZOO_FAKE_TAGS"]
+        .map { $0.split(separator: ",").map(String.init) }
+    #endif
 
     func scanOnce(_ done: @escaping (String) -> Void) {
         onceHandler = done
@@ -33,6 +39,9 @@ final class NFCScanner: NSObject, ObservableObject {
     }
 
     func start(message: String = "Hold a zoo badge near the top of the iPhone.") {
+        #if DEBUG
+        if fakeTags != nil { return startFake() }
+        #endif
         guard NFCTagReaderSession.readingAvailable else {
             status = "NFC isn't available on this device"
             return
@@ -64,30 +73,62 @@ final class NFCScanner: NSObject, ObservableObject {
             done(id)
             return
         }
+        if send(id, alert: { if session.isReady { session.alertMessage = $0 } }) {
+            session.alertMessage = "✓ Got it! Next badge…"
+        }
+        restart(session)
+    }
+
+    /// Records one read and POSTs it; `alert` shows the outcome on the NFC sheet.
+    /// Returns false for the same badge again within the duplicate window.
+    private func send(_ id: String, alert: @escaping (String) -> Void) -> Bool {
         let now = Date()
         if let last = lastSent, last.id == id, now.timeIntervalSince(last.at) < duplicateWindow {
-            restart(session)
-            return
+            return false
         }
         lastSent = (id, now)
         sentCount += 1
         haptics.notificationOccurred(.success)
-        session.alertMessage = "✓ Got it! Next badge…"
         lastResponse = "Sending…"
         let server = serverURL
         Task {
             switch await TapClient.post(id: id, server: server) {
             case .success(let summary):
                 lastResponse = summary
-                if session.isReady { session.alertMessage = "\(summary)\nNext badge…" }
+                alert("\(summary)\nNext badge…")
             case .failure(let error):
                 lastResponse = "⚠️ \(error.localizedDescription)"
                 haptics.notificationOccurred(.error)
-                if session.isReady { session.alertMessage = "⚠️ Server not reachable" }
+                alert("⚠️ Server not reachable")
             }
         }
-        restart(session)
+        return true
     }
+
+    #if DEBUG
+    /// Reads the fake badges as if held to the phone: one for a register scan, all of them otherwise.
+    private func startFake() {
+        isScanning = true
+        status = "Scanning…"
+        Task {
+            while let id = fakeTags?.first {
+                try? await Task.sleep(nanoseconds: 300_000_000)
+                fakeTags?.removeFirst()
+                lastID = id
+                if let done = onceHandler {
+                    onceHandler = nil
+                    isScanning = false
+                    status = "Tap Start Scanning"
+                    done(id)
+                    return
+                }
+                _ = send(id, alert: { _ in })
+            }
+            isScanning = false
+            status = "Stopped. Tap Start Scanning."
+        }
+    }
+    #endif
 
     fileprivate func restart(_ session: NFCTagReaderSession, after delay: TimeInterval = restartDelay) {
         DispatchQueue.main.asyncAfter(deadline: .now() + delay) {

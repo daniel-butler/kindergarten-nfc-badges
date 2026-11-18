@@ -6,7 +6,8 @@
   },
   "scripts": {
     "test": "playwright test",
-    "install-browser": "playwright install chromium"
+    "install-browser": "playwright install chromium",
+    "test:phone": "BADGE_PHONE_E2E=1 playwright test tests/phone.spec.js"
   },
   "devDependencies": {
     "@playwright/test": "^1.65.1"
