@@ -52,7 +52,10 @@ const inside = (page) => page.evaluate(() => window.Badge.current.state().inside
 
 test.beforeAll(async () => {
   test.setTimeout(900_000);
-  destination = `platform=iOS Simulator,id=${await simulator()}`;
+  const id = await simulator();
+  destination = `platform=iOS Simulator,id=${id}`;
+  // A cold simulator can drop the first test runner while it boots, so boot it fully first.
+  await run('xcrun', ['simctl', 'bootstatus', id, '-b']);
   await xcodebuild(['build-for-testing']);
 });
 
@@ -84,8 +87,12 @@ test('Keep out from the phone sends the trick badge away with the goose', async 
   await expect(page.locator('.zoo-vote')).toBeVisible();
   await page.waitForTimeout(1100);
   await phone('testPresenterKeepsOutTrick');
-  await expect(page.locator('.zoo-goose')).toBeVisible();
+  await expect(page.locator('.zoo-vote')).toHaveCount(0);
   await expect(tally(page, 0)).toBeVisible();
+  // The goose only waves for a moment; tapping the kept-out badge again brings it back, not a new vote.
+  await phoneTap(request, FOX_TRICK.canonical_id);
+  await expect(page.locator('.zoo-goose')).toBeVisible();
+  await expect(page.locator('.zoo-vote')).toHaveCount(0);
 });
 
 test('Allow special from the phone opens the Zoo List; the special then starts the party', async ({ page, request }) => {
