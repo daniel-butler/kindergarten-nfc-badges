@@ -204,9 +204,14 @@ button {
 .dup .title { font-size: 13vmin; }
 .dup .subtitle { color: #fff; }
 
-.btn.trick-on { background: #8e24aa; border-color: #e1bee7; }
-.mini-card.trick { position: relative; }
-.mini-card.trick::after { content: "🎭"; position: absolute; right: -1vmin; bottom: -1vmin; font-size: 4vmin; }
+.roles { display: inline-flex; border: 0.5vmin solid #fff; border-radius: 2vmin; overflow: hidden; }
+.role { font-size: 3.8vmin; padding: 1.4vmin 2.2vmin; border: 0; background: var(--panel); }
+.role + .role { border-left: 0.3vmin solid #fff; }
+.role.selected { background: var(--accent); color: #000; }
+.mini-card.role-trick, .mini-card.role-special { position: relative; }
+.mini-card.role-trick::after, .mini-card.role-special::after { position: absolute; right: -1vmin; bottom: -1vmin; font-size: 4vmin; }
+.mini-card.role-trick::after { content: "🎭"; }
+.mini-card.role-special::after { content: "⭐"; }
 
 /* ---------- secret number ---------- */
 
@@ -247,23 +252,7 @@ button {
 .zoo-top { display: flex; align-items: center; gap: 3vmin; }
 .zoo-counter { font-size: 6vmin; }
 
-.zoo-progress {
-  width: 40vmin;
-  height: 5vmin;
-  border-radius: 99px;
-  border: 0.6vmin solid var(--ink);
-  background: #fff;
-  overflow: hidden;
-}
 
-.zoo-progress-fill {
-  height: 100%;
-  width: 0;
-  border-radius: 99px;
-  background: linear-gradient(90deg, #ff6b6b, #ffa94d, #ffe066, #69db7c, #4dabf7, #b197fc);
-  background-size: 40vmin 100%;
-  transition: width 0.8s cubic-bezier(.2, 1.4, .4, 1);
-}
 .zoo-counter b { color: var(--accent); font-size: 8vmin; }
 .zoo-stage { flex: 1; width: 100%; min-height: 0; display: flex; align-items: stretch; transition: opacity 0.8s; }
 
@@ -367,19 +356,7 @@ button {
   to { transform: rotate(12deg) translateY(-8%); }
 }
 
-.zoo-denied {
-  position: absolute;
-  inset: 0;
-  z-index: 10;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 2vmin;
-  background: var(--danger);
-}
 
-.zoo-denied .title { font-size: 16vmin; }
 
 .scene-zoo.finale .zoo-stage, .scene-zoo.finale .zoo-counter { opacity: 0; }
 .parade { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
@@ -623,7 +600,6 @@ body.kid-mode .digit:nth-child(6n + 5) { background: #74c0fc; }
 body.kid-mode .digit:nth-child(6n + 6) { background: #d0bfff; }
 
 /* Zoo Gate */
-body.kid-mode .zoo-counter b { color: #e8590c; text-shadow: 0 0.6vmin 0 #fff; }
 body.kid-mode .zoo-hint { color: var(--ink); }
 body.kid-mode .welcome {
   background: #fff;
@@ -632,7 +608,6 @@ body.kid-mode .welcome {
   border-radius: 4vmin;
   padding: 1.5vmin 2.5vmin;
 }
-body.kid-mode .zoo-denied, body.kid-mode .zoo-denied .title, body.kid-mode .zoo-denied .subtitle { color: #fff; text-shadow: none; }
 body.kid-mode .finale-title { color: #d6336c; }
 
 /* The List */
@@ -662,3 +637,34 @@ body.kid-mode .scene-who.nope .title, body.kid-mode .scene-who.nope .big-label {
 .list-row .away-mark { font-family: var(--emoji); font-size: calc(var(--row) * 0.6); }
 .list-lookup .sticker { height: 7vmin; }
 .debug-log .sticker { vertical-align: middle; }
+
+/* ---------- zoo: tally and gentle retry ---------- */
+
+.zoo-tally { display: flex; align-items: center; gap: 1.4vmin; flex-wrap: wrap; justify-content: center; min-height: 7vmin; }
+.tally-house { font-family: var(--emoji); font-size: 6vmin; line-height: 1; }
+.tally-group { width: 8.5vmin; height: 7vmin; overflow: visible; }
+.tally-group line { stroke: var(--ink); stroke-width: 6; stroke-linecap: round; }
+.tally-group line.tally-new {
+  stroke: #e8590c;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: tally-pop 0.6s cubic-bezier(.2, 1.6, .4, 1);
+}
+@keyframes tally-pop { from { transform: scale(0.1); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+
+.zoo-oops {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 6vmin;
+  margin: 0 auto;
+  width: max-content;
+  z-index: 12;
+  padding: 1.2vmin 4vmin;
+  border-radius: 99px;
+  border: 0.6vmin solid var(--ink);
+  background: #fff;
+  color: var(--ink);
+  font-size: 5vmin;
+  white-space: nowrap;
+}

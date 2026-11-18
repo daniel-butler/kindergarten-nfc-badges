@@ -1,65 +1,50 @@
 const { test, expect } = require('@playwright/test');
 const {
-  reloadPage, uploadImage, getCards, PENGUIN, LION, FOX_TRICK, manyCards, setCards, phoneTap, openScene, readerScan, scene,
+  command, reloadPage, uploadImage, getCards, PENGUIN, LION, FOX_TRICK, manyCards, setCards, phoneTap, openScene, readerScan, scene,
 } = require('./helpers');
 
 const slot = (page, card) => page.locator(`.zoo-slot.filled[data-id="${card.canonical_id}"]`);
 
 test.beforeEach(async ({ request }) => {
   await setCards(request, [PENGUIN, LION, FOX_TRICK]);
+  await command(request, 'reset');
 });
 
 test.describe('Zoo Gate (backup, ⌥6)', () => {
-  test('check-ins walk in, count only real badges, and deny unknown badges', async ({ page, request }) => {
-    await openScene(page, 'gate', 3);
-    await expect(page.locator('.zoo-counter')).toHaveText('0 of 2 animals are home');
+  const tally = (page, n) => page.locator(`.zoo-tally[data-count="${n}"]`);
 
+  test('normal badges walk in and add marks; unknown badges get a gentle retry', async ({ page, request }) => {
+    await openScene(page, 'gate', 3);
+    await expect(tally(page, 0)).toBeVisible();
     await phoneTap(request, PENGUIN.canonical_id);
     await expect(page.locator('.walker')).toHaveCount(1);
-    await expect(page.locator('.zoo-counter')).toHaveText('1 of 2 animals are home');
+    await expect(tally(page, 1)).toBeVisible();
     await expect(slot(page, PENGUIN)).toBeVisible({ timeout: 5000 });
-    await expect(page.locator('.zoo-progress-fill')).toHaveAttribute('style', /width: 50%/);
-
-    await phoneTap(request, FOX_TRICK.canonical_id); // trick badge: walks in, not counted
-    await expect(slot(page, FOX_TRICK)).toBeVisible({ timeout: 5000 });
-    await expect(page.locator('.zoo-counter')).toHaveText('1 of 2 animals are home');
-
-    await phoneTap(request, PENGUIN.canonical_id); // already inside
-    await expect(page.locator('.zoo-counter')).toHaveText('1 of 2 animals are home');
-    await expect(page.locator('.zoo-slot.filled')).toHaveCount(2);
 
     await phoneTap(request, 'DEADBEEF');
-    await expect(page.locator('.zoo-denied')).toContainText('ACCESS DENIED');
-    await expect(page.locator('.zoo-denied')).toBeHidden({ timeout: 4000 });
+    await expect(page.locator('.zoo-oops')).toHaveText('Oops! Tap again 🔄');
+    await expect(page.locator('.zoo-denied')).toHaveCount(0);
+    await expect(tally(page, 1)).toBeVisible();
   });
 
-  test('last real check-in opens the gate, parades, and congratulates', async ({ page, request }) => {
+  test('Option+S opens the gate, parades, and congratulates', async ({ page, request }) => {
     await openScene(page, 'gate', 3);
     await phoneTap(request, PENGUIN.canonical_id);
-    await phoneTap(request, LION.canonical_id);
-    await expect(page.locator('.zoo-counter')).toHaveText('2 of 2 animals are home');
-    await expect(page.locator('.zoo-gate')).toHaveClass(/open/, { timeout: 5000 });
-    await expect(page.locator('.marcher')).toHaveCount(3, { timeout: 5000 });
-    await expect(scene(page)).toContainText('Congratulations, Official Zookeepers!', { timeout: 15000 });
-    await expect(page.locator('.finale-animals .ring')).toHaveCount(3);
-  });
-
-  test('presenter can open the gate early; check-ins survive reload; reset clears', async ({ page, request }) => {
-    await openScene(page, 'gate', 3);
-    await phoneTap(request, PENGUIN.canonical_id);
-    await expect(page.locator('.zoo-counter')).toHaveText('1 of 2 animals are home');
-
-    await reloadPage(page, 3);
-    await expect(page.locator('.zoo-counter')).toHaveText('1 of 2 animals are home');
-    await expect(slot(page, PENGUIN)).toBeVisible();
-
     await page.keyboard.press('Alt+s');
-    await expect(page.locator('.zoo-gate')).toHaveClass(/open/);
-    await expect(scene(page)).toContainText('Congratulations', { timeout: 15000 });
+    await expect(page.locator('.zoo-gate')).toHaveClass(/open/, { timeout: 5000 });
+    await expect(scene(page)).toContainText('Congratulations, Official Zookeepers!', { timeout: 15000 });
+  });
 
-    await page.keyboard.press('Alt+p');
-    await page.locator('#panel button', { hasText: 'Reset check-ins' }).click();
-    await expect(page.locator('.zoo-counter')).toHaveText('0 of 2 animals are home');
+  test('check-ins survive reload; Option+R twice resets', async ({ page, request }) => {
+    await openScene(page, 'gate', 3);
+    await phoneTap(request, PENGUIN.canonical_id);
+    await expect(tally(page, 1)).toBeVisible();
+    await reloadPage(page, 3);
+    await expect(tally(page, 1)).toBeVisible();
+    await expect(slot(page, PENGUIN)).toBeVisible();
+    await page.keyboard.press('Alt+r');
+    await page.keyboard.press('Alt+r');
+    await expect(tally(page, 0)).toBeVisible();
   });
 });
 
@@ -162,7 +147,7 @@ test.describe('25 badges at 720p', () => {
 
     await page.keyboard.press('Alt+6');
     await expect(page.locator('.zoo-slot')).toHaveCount(25);
-    await expect(page.locator('.zoo-counter')).toHaveText('0 of 23 animals are home');
+    await expect(page.locator('.zoo-tally[data-count="0"]')).toBeVisible();
     await expect(page.locator('.zoo-grid')).toHaveAttribute('style', /grid-template-columns/);
     for (const s of [page.locator('.zoo-slot').first(), page.locator('.zoo-slot').last()]) {
       const box = await s.boundingBox();

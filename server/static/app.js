@@ -112,6 +112,18 @@ const Sound = (() => {
     unlock: audio,
     get muted() { return muted; },
     set muted(value) { muted = value; },
+    /** Soft, friendly "try again". */
+    boop() {
+      tone(520, 0, 0.14, { type: 'sine', gain: 0.18, slideTo: 400 });
+      tone(400, 0.13, 0.18, { type: 'sine', gain: 0.15, slideTo: 330 });
+    },
+    /** Gatekeeper goose. */
+    honk() {
+      [0, 0.28].forEach((s) => {
+        tone(330, s, 0.22, { type: 'sawtooth', gain: 0.16, slideTo: 260, vibrato: 18 });
+        tone(336, s, 0.22, { type: 'square', gain: 0.08, slideTo: 262 });
+      });
+    },
     tick(i = 0) {
       tone(660 + i * 35, 0, 0.09, { type: 'triangle', gain: 0.18 });
     },
@@ -399,6 +411,7 @@ const Badge = (() => {
     });
     source.addEventListener('tap', (e) => handleTap(JSON.parse(e.data)));
     source.addEventListener('cards', (e) => setCards(JSON.parse(e.data)));
+    source.addEventListener('command', (e) => Commands.run(JSON.parse(e.data).action));
   }
 
   api._connect = connect;
@@ -520,6 +533,7 @@ const Panel = (() => {
     ].filter(Boolean));
   }
 
+  let resetArmedUntil = 0;
   document.addEventListener('keydown', (e) => {
     if (!e.altKey || e.ctrlKey || e.metaKey) return;
     const code = e.code;
@@ -530,6 +544,20 @@ const Panel = (() => {
     } else if (code === 'KeyP') toggle();
     else if (code === 'KeyF') fullscreen();
     else if (code === 'KeyS') Badge.current?.onSkip?.();
+    else if (code === 'KeyL') Commands.send('toggle-list');
+    else if (code === 'KeyY') Commands.send('let-in');
+    else if (code === 'KeyN') Commands.send('keep-out');
+    else if (code === 'KeyA') Commands.send('allow-special');
+    else if (code === 'KeyR') {
+      if (performance.now() < resetArmedUntil) {
+        resetArmedUntil = 0;
+        Badge.banner(null);
+        Commands.send('reset');
+      } else {
+        resetArmedUntil = performance.now() + 3000;
+        Badge.banner('Press ⌥R again to reset the zoo', { ms: 3000 });
+      }
+    }
     else if (code === 'KeyM') Sound.muted = !Sound.muted;
     else if (code === 'KeyT') Reader.toggleTestMode();
     else handled = false;
@@ -580,15 +608,18 @@ Badge.registerScene((() => {
   let view; // { kind: 'idle' } | { kind: 'pick', id, card? } | { kind: 'card', card, note } | { kind: 'dup', message }
   let choice;
 
-  const emptyChoice = () => ({ emoji: null, label: null, color: null, trick: false });
+  const emptyChoice = () => ({ emoji: null, label: null, color: null, role: 'normal' });
+  const ROLES = [['normal', 'Normal'], ['trick', '🎭 Trick'], ['special', '⭐ Special']];
+  const ROLE_NOTE = { trick: ' · 🎭 trick badge', special: ' · ⭐ special badge' };
 
   function header() {
     const n = Badge.cards.length;
-    const tricks = Badge.cards.filter((c) => c.trick).length;
+    const tricks = Badge.cards.filter((c) => c.role === 'trick').length;
+    const specials = Badge.cards.filter((c) => c.role === 'special').length;
     return el('div', { class: 'setup-header' },
       el('div', {}, '🛠️ Setup'),
       el('div', { class: 'count-pill' },
-        `${n} badge${n === 1 ? '' : 's'} registered${tricks ? ` · ${tricks} 🎭` : ''}`));
+        `${n} badge${n === 1 ? '' : 's'} registered${tricks ? ` · ${tricks} 🎭` : ''}${specials ? ` · ${specials} ⭐` : ''}`));
   }
 
   function set(next) {
@@ -607,7 +638,7 @@ Badge.registerScene((() => {
       case 'card': return [
         cardCircle(view.card),
         el('div', { class: 'big-label' }, `${view.card.label} · ${view.card.color.name}`),
-        el('div', { class: 'subtitle' }, view.note, view.card.trick ? ' · 🎭 trick badge' : ''),
+        el('div', { class: 'subtitle' }, view.note, ROLE_NOTE[view.card.role] || ''),
         el('div', { class: 'row' },
           el('button', { class: 'btn', onclick: () => startEdit(view.card) }, '✏️ Change'),
           el('button', { class: 'btn primary', onclick: () => set({ kind: 'idle' }) }, 'Done')),
@@ -623,7 +654,7 @@ Badge.registerScene((() => {
         el('div', { class: 'subtitle' }, 'To link phone + reader: tap on one, then the other'),
         el('div', { class: 'card-strip' }, Badge.cards.map((c) =>
           el('button', {
-            class: `mini-card ${c.trick ? 'trick' : ''} ${c.away ? 'away' : ''}`,
+            class: `mini-card role-${c.role || 'normal'} ${c.away ? 'away' : ''}`,
             style: `background:${c.color.hex}`,
             title: c.label,
             onclick: () => startEdit(c),
@@ -666,20 +697,21 @@ Badge.registerScene((() => {
         el('span', { class: 'mono subtitle' }, `· ${view.id}`)),
       el('div', { class: 'row' },
         el('button', { class: 'btn primary', disabled: ready ? null : 'disabled', onclick: save }, '💾 Save'),
-        el('button', {
-          class: `btn ${choice.trick ? 'trick-on' : ''}`,
+        el('div', { class: 'roles' }, ROLES.map(([role, label]) => el('button', {
+          class: `role ${choice.role === role ? 'selected' : ''}`,
+          'data-role': role,
           onclick: () => {
-            choice.trick = !choice.trick;
+            choice.role = role;
             render();
           },
-        }, choice.trick ? '🎭 Trick: ON' : '🎭 Trick: off'),
+        }, label))),
         el('button', { class: 'btn', onclick: () => set({ kind: 'idle' }) }, 'Cancel'),
         editing ? el('button', { class: 'btn danger', onclick: remove }, '🗑️ Delete') : null),
     ];
   }
 
   function startEdit(card) {
-    choice = { emoji: card.emoji, label: card.label, color: card.color, trick: !!card.trick };
+    choice = { emoji: card.emoji, label: card.label, color: card.color, role: card.role || 'normal' };
     set({ kind: 'pick', id: card.canonical_id, card });
   }
 
@@ -812,12 +844,19 @@ function shuffle(list) {
 /** Check-ins shared by the 3D Zoo and the backup 2D Zoo Gate; survives a page reload. */
 const ZooStore = (() => {
   const KEY = 'zoo-gate-v1';
-  const fresh = () => ({ checkedIn: [], open: false });
+  const fresh = () => ({ checkedIn: [], tally: 0, tricks: {}, open: false });
   return {
     load() {
       try {
         const s = JSON.parse(localStorage.getItem(KEY));
-        if (s && Array.isArray(s.checkedIn)) return { checkedIn: s.checkedIn, open: !!s.open };
+        if (s && Array.isArray(s.checkedIn)) {
+          return {
+            checkedIn: s.checkedIn,
+            tally: Number.isInteger(s.tally) ? s.tally : s.checkedIn.length,
+            tricks: s.tricks && typeof s.tricks === 'object' ? s.tricks : {},
+            open: !!s.open,
+          };
+        }
       } catch {
         /* private window or corrupt value: start fresh */
       }
@@ -838,21 +877,89 @@ const ZooStore = (() => {
   };
 })();
 
-/** Only real (non-trick) badges of kids who are here count toward the party. */
-function zooCounts(cards, checkedIn) {
-  const real = cards.filter((c) => !c.trick && !c.away);
-  const inside = new Set(checkedIn);
-  return { done: real.filter((c) => inside.has(c.canonical_id)).length, total: real.length };
+/** What a tap means in a zoo scene: 'unknown' | 'inside' | 'enter'. */
+function zooDecide(state, card) {
+  if (!card) return 'unknown';
+  if (state.checkedIn.includes(card.canonical_id) && !card.away) return 'inside';
+  return 'enter';
 }
 
-function zooCounterText(cards, checkedIn) {
-  const { done, total } = zooCounts(cards, checkedIn);
-  return total ? el('span', {}, el('b', {}, done), ` of ${total} animals are home`) : 'No animals registered yet';
+/** Let a card into the zoo: on the list, plus one tally mark. */
+function zooAdmit(state, card) {
+  if (!state.checkedIn.includes(card.canonical_id)) state.checkedIn.push(card.canonical_id);
+  state.tally += 1;
+  ZooStore.save(state);
 }
+
+function svgEl(tag, attrs = {}) {
+  const node = document.createElementNS('http://www.w3.org/2000/svg', tag);
+  for (const [k, v] of Object.entries(attrs)) node.setAttribute(k, v);
+  return node;
+}
+
+/** Tally marks in groups of five (four strokes and a slash). `fresh` pops the newest mark. */
+function tallyMarks(n, fresh = false) {
+  const groups = [];
+  for (let g = 0; g * 5 < n; g++) {
+    const svg = svgEl('svg', { viewBox: '0 0 64 52', class: 'tally-group', 'aria-hidden': 'true' });
+    for (let k = 0; k < Math.min(5, n - g * 5); k++) {
+      const line = k < 4
+        ? svgEl('line', { x1: 10 + k * 14, y1: 6, x2: 10 + k * 14, y2: 46 })
+        : svgEl('line', { x1: 2, y1: 40, x2: 62, y2: 12 });
+      if (fresh && g * 5 + k === n - 1) line.classList.add('tally-new');
+      svg.append(line);
+    }
+    groups.push(svg);
+  }
+  return el('div', { class: 'zoo-tally', 'data-count': n, title: `${n} in the zoo` },
+    el('span', { class: 'tally-house' }, '🏠'), groups);
+}
+
+/** Gentle "try again" for a badge the zoo doesn't know. Nobody goes in. */
+function zooRetry(root) {
+  root.querySelector('.zoo-oops')?.remove();
+  const pill = el('div', { class: 'zoo-oops pop' }, 'Oops! Tap again 🔄');
+  root.append(pill);
+  Sound.boop();
+  setTimeout(() => pill.remove(), 1500);
+}
+
+/** One path for every presenter command: keys and phone buttons both go through the server. */
+const Commands = (() => {
+  const SCENES = {
+    'scene-setup': 'setup', 'scene-secret': 'secret', 'scene-zoo': 'zoo', 'scene-list': 'list',
+    'scene-who': 'who', 'scene-gate': 'gate', 'scene-debug': 'debug',
+  };
+  const PAGE_ONLY = new Set([...Object.keys(SCENES), 'toggle-list', 'party', 'let-in', 'keep-out']);
+
+  function run(action) {
+    if (SCENES[action]) {
+      Badge.show(SCENES[action]);
+      return;
+    }
+    if (action === 'reset') ZooStore.reset();
+    Badge.current?.onCommand?.(action);
+  }
+
+  async function send(action) {
+    try {
+      const res = await fetch('/api/command', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ action }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+    } catch {
+      if (PAGE_ONLY.has(action)) run(action);
+      else Badge.banner('🔌 Server not reachable', { error: true });
+    }
+  }
+
+  return { run, send };
+})();
 
 Badge.registerScene((() => {
   const WALK_MS = 2600;
-  const AUTO_OPEN_DELAY_MS = 2200;
   const PARADE_STAGGER_MS = 350;
   const PARADE_CROSS_MS = 4500;
 
@@ -862,7 +969,6 @@ Badge.registerScene((() => {
   let slots = [];
   let walking = 0;
   let generation = 0;
-  let deniedTimer;
   let hintTimer;
 
   const cardById = (id) => Badge.cards.find((c) => c.canonical_id === id);
@@ -872,12 +978,8 @@ Badge.registerScene((() => {
   const save = () => ZooStore.save(state);
   const colors = () => Badge.cards.map((c) => c.color.hex);
 
-  const counts = () => zooCounts(Badge.cards, state.checkedIn);
-
-  function updateCounter() {
-    const { done, total } = counts();
-    els.counter.replaceChildren(zooCounterText(Badge.cards, state.checkedIn));
-    els.progress.style.width = `${total ? (100 * done) / total : 0}%`;
+  function updateTally(fresh = false) {
+    els.top.replaceChildren(tallyMarks(state.tally, fresh));
   }
 
   function hint(text) {
@@ -908,8 +1010,7 @@ Badge.registerScene((() => {
     const inside = insideCards();
     slots = present().map((_, i) => (inside[i] ? filledSlot(inside[i]) : el('div', { class: 'zoo-slot empty' })));
     els = {
-      counter: el('div', { class: 'zoo-counter' }),
-      progress: el('div', { class: 'zoo-progress-fill' }),
+      top: el('div', { class: 'zoo-top' }),
       arrive: el('div', { class: 'zoo-arrive' }),
       hint: el('div', { class: 'zoo-hint' }),
       gate: el('div', { class: 'zoo-gate' },
@@ -922,9 +1023,9 @@ Badge.registerScene((() => {
     };
     els.inside = el('div', { class: 'zoo-inside' }, els.grid);
     root.replaceChildren(
-      el('div', { class: 'zoo-top' }, els.counter, el('div', { class: 'zoo-progress' }, els.progress)),
+      els.top,
       el('div', { class: 'zoo-stage' }, el('div', { class: 'zoo-outside' }, els.arrive, els.hint), els.gate, els.inside));
-    updateCounter();
+    updateTally();
     idleHint();
     requestAnimationFrame(layoutSlots);
   }
@@ -988,17 +1089,6 @@ Badge.registerScene((() => {
     }).catch(() => {});
   }
 
-  function denied() {
-    Sound.buzzer();
-    Badge.cancel(deniedTimer);
-    root.querySelector('.zoo-denied')?.remove();
-    root.append(el('div', { class: 'zoo-denied' },
-      el('div', { class: 'huge-emoji wobble' }, '🙅'),
-      el('div', { class: 'title shake' }, 'ACCESS DENIED'),
-      el('div', { class: 'subtitle' }, 'That badge is not a zoo badge!')));
-    deniedTimer = Badge.later(() => root.querySelector('.zoo-denied')?.remove(), 2500);
-  }
-
   function openGate() {
     if (state.open) return;
     state.open = true;
@@ -1045,10 +1135,6 @@ Badge.registerScene((() => {
     else renderGate();
   }
 
-  function reset() {
-    state = ZooStore.reset();
-    Badge.show('gate');
-  }
 
   function bounce(node) {
     if (!node) return;
@@ -1067,8 +1153,6 @@ Badge.registerScene((() => {
       state = ZooStore.load();
       render();
       addEventListener('resize', layoutSlots);
-      const { done, total } = counts();
-      if (!state.open && total && done === total) Badge.later(openGate, AUTO_OPEN_DELAY_MS);
     },
     onExit() {
       removeEventListener('resize', layoutSlots);
@@ -1077,11 +1161,20 @@ Badge.registerScene((() => {
     onCards() {
       if (!state.open && !root.classList.contains('finale')) render();
     },
-    onSkip: openGate,
-    skipLabel: '🔓 Open the gate now',
-    actions: [{ label: '🔄 Reset check-ins', run: reset }],
+    onSkip: () => Commands.send('party'),
+    skipLabel: '🎉 Start the party',
+    actions: [{ label: '🔄 Reset the zoo', run: () => Commands.send('reset') }],
+    onCommand(action) {
+      if (action === 'party') openGate();
+      else if (action === 'reset') Badge.show('gate');
+    },
+    state: () => ({
+      inside: insideCards().map((c) => c.canonical_id),
+      tally: state.tally,
+      finale: state.open,
+    }),
     onTap(ev) {
-      if (!ev.card) return denied();
+      if (zooDecide(state, ev.card) === 'unknown') return zooRetry(root);
       const card = ev.card;
       if (state.open) {
         Sound.chime();
@@ -1096,12 +1189,9 @@ Badge.registerScene((() => {
         hintTimer = Badge.later(idleHint, 2000);
         return;
       }
-      state.checkedIn.push(card.canonical_id);
-      save();
+      zooAdmit(state, card);
       walkIn(card, insideCards().length - 1);
-      updateCounter();
-      const { done, total } = counts();
-      if (total && done === total) Badge.later(openGate, AUTO_OPEN_DELAY_MS);
+      updateTally(true);
     },
   };
 })());
@@ -1363,16 +1453,10 @@ Badge.registerScene((() => {
   let busy = false;
   let finale = false;
   let generation = 0;
-  let deniedTimer;
   let hud;
 
   const V = (x, y, z) => new THREE.Vector3(x, y, z);
   const cardById = (id) => Badge.cards.find((c) => c.canonical_id === id);
-  const counts = () => zooCounts(Badge.cards, state.checkedIn);
-  const shouldParty = () => {
-    const { done, total } = counts();
-    return total > 0 && done === total;
-  };
 
   // ---------- tiny tween system driven by the render loop ----------
   const tasks = new Set();
@@ -1757,7 +1841,6 @@ Badge.registerScene((() => {
       await arrive(card);
     }
     busy = false;
-    if (w && !finale && shouldParty()) Badge.later(startParty, PARTY_DELAY_MS);
   }
 
   function setCam(view) {
@@ -1784,17 +1867,6 @@ Badge.registerScene((() => {
       Sound.fanfare();
       Confetti.rain(Badge.cards.map((c) => c.color.hex), { count: 450 });
     }
-  }
-
-  function denied() {
-    Sound.buzzer();
-    Badge.cancel(deniedTimer);
-    root.querySelector('.zoo-denied')?.remove();
-    root.append(el('div', { class: 'zoo-denied' },
-      el('div', { class: 'huge-emoji wobble' }, '🙅'),
-      el('div', { class: 'title shake' }, 'ACCESS DENIED'),
-      el('div', { class: 'subtitle' }, 'That badge is not a zoo badge!')));
-    deniedTimer = Badge.later(() => root.querySelector('.zoo-denied')?.remove(), 2500);
   }
 
   // ---------- render loop ----------
@@ -1846,10 +1918,8 @@ Badge.registerScene((() => {
     w.camera.updateProjectionMatrix();
   }
 
-  function updateHud() {
-    const { done, total } = counts();
-    hud.counter.replaceChildren(zooCounterText(Badge.cards, state.checkedIn));
-    hud.progress.style.width = `${total ? (100 * done) / total : 0}%`;
+  function updateHud(fresh = false) {
+    hud.replaceChildren(tallyMarks(state.tally, fresh));
   }
 
   function teardown() {
@@ -1877,8 +1947,8 @@ Badge.registerScene((() => {
       root.className = 'scene scene-zoo3d';
       state = ZooStore.load();
       finale = state.open;
-      hud = { counter: el('div', { class: 'zoo-counter' }), progress: el('div', { class: 'zoo-progress-fill' }) };
-      root.append(el('div', { class: 'zoo-top zoo3d-hud' }, hud.counter, el('div', { class: 'zoo-progress' }, hud.progress)));
+      hud = el('div', { class: 'zoo-top zoo3d-hud' });
+      root.append(hud);
       updateHud();
       w = buildWorld(root);
       if (!w) {
@@ -1896,27 +1966,25 @@ Badge.registerScene((() => {
       updateHud();
       if (w) syncAnimals();
     },
-    onSkip: () => startParty(),
-    actions: [{
-      label: '🔄 Reset check-ins',
-      run() {
-        state = ZooStore.reset();
-        Badge.show('zoo');
-      },
-    }],
+    onSkip: () => Commands.send('party'),
+    actions: [{ label: '🔄 Reset the zoo', run: () => Commands.send('reset') }],
+    onCommand(action) {
+      if (action === 'party') startParty();
+      else if (action === 'reset') Badge.show('zoo');
+    },
     onTap(ev) {
-      if (!ev.card) return denied();
+      const decision = zooDecide(state, ev.card);
+      if (decision === 'unknown') return zooRetry(root);
       const card = ev.card;
       const a = animals.get(card.canonical_id);
-      if (state.checkedIn.includes(card.canonical_id) && !card.away) {
+      if (decision === 'inside') {
         if (a) a.bounceAt = performance.now();
         Sound.tick(4);
         if (finale) Confetti.burst([card.color.hex]);
         return;
       }
-      if (!state.checkedIn.includes(card.canonical_id)) state.checkedIn.push(card.canonical_id);
-      ZooStore.save(state);
-      updateHud();
+      zooAdmit(state, card);
+      updateHud(true);
       if (!w) return;
       queue.push(card);
       drain();
@@ -1925,6 +1993,7 @@ Badge.registerScene((() => {
       inside: [...animals.values()].filter((a) => a.arrived).map((a) => a.card.canonical_id),
       queued: queue.length,
       finale,
+      tally: state.tally,
       sprites: w ? w.scene.children.filter((o) => o.userData.animal).length : 0,
     }),
   };
@@ -1951,7 +2020,7 @@ Badge.registerScene((() => {
       el('td', { class: 'mono' }, ev.raw_id),
       el('td', { class: 'mono' }, ev.canonical_id),
       ev.card
-        ? el('td', {}, cardArt(ev.card, 4), ` ${ev.card.label}${ev.card.trick ? ' 🎭' : ''} ${flags}`)
+        ? el('td', {}, cardArt(ev.card, 4), ` ${ev.card.label}${{ trick: ' 🎭', special: ' ⭐' }[ev.card.role] || ''} ${flags}`)
         : el('td', { class: 'miss' }, `— unknown ${flags}`));
   }
 

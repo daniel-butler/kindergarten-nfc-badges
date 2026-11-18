@@ -50,7 +50,7 @@ test.describe('Setup', () => {
     await expect(scene(page)).toContainText('3 badges registered');
 
     const fox = (await getCards(request)).find((c) => c.canonical_id === '04112233445566');
-    expect(fox).toMatchObject({ emoji: '🦊', label: 'Fox', color: { hex: '#FB8C00', name: 'Orange' }, trick: false });
+    expect(fox).toMatchObject({ emoji: '🦊', label: 'Fox', color: { hex: '#FB8C00', name: 'Orange' }, role: 'normal' });
   });
 
   test('known badge can be changed and deleted', async ({ page, request }) => {
@@ -72,18 +72,28 @@ test.describe('Setup', () => {
     expect(await getCards(request)).toHaveLength(1);
   });
 
-  test('a badge can be marked as a trick badge', async ({ page, request }) => {
+  test('Setup sets a badge to trick or special', async ({ page, request }) => {
     await openScene(page, 'setup', 2);
     await page.locator('.mini-card[title=Penguin]').click();
+    await expect(page.locator('button.role[data-role=normal]')).toHaveClass(/selected/);
     await page.locator('button.animal[title=Owl]').click();
-    await page.locator('button', { hasText: 'Trick: off' }).click();
+    await page.locator('button.role[data-role=trick]').click();
     await page.locator('button', { hasText: 'Save' }).click();
     await expect(scene(page)).toContainText('trick badge');
     await page.locator('button', { hasText: 'Done' }).click();
-    await expect(page.locator('.mini-card.trick')).toHaveCount(1);
+    await expect(page.locator('.mini-card.role-trick')).toHaveCount(1);
     await expect(page.locator('.count-pill')).toContainText('1 🎭');
     const owl = (await getCards(request)).find((c) => c.canonical_id === PENGUIN.canonical_id);
-    expect(owl).toMatchObject({ emoji: '🦉', label: 'Owl', trick: true, color: { name: 'Blue' } });
+    expect(owl).toMatchObject({ emoji: '🦉', label: 'Owl', role: 'trick', color: { name: 'Blue' } });
+
+    await page.locator('.mini-card[title=Owl]').click();
+    await page.locator('button.role[data-role=special]').click();
+    await page.locator('button', { hasText: 'Save' }).click();
+    await expect(scene(page)).toContainText('special badge');
+    await page.locator('button', { hasText: 'Done' }).click();
+    await expect(page.locator('.mini-card.role-special')).toHaveCount(1);
+    await expect(page.locator('.count-pill')).toContainText('1 ⭐');
+    expect((await getCards(request)).find((c) => c.canonical_id === PENGUIN.canonical_id).role).toBe('special');
   });
 
   test('tap phone then reader links the reader id', async ({ page, request }) => {
