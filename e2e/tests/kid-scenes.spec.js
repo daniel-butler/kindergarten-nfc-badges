@@ -51,6 +51,29 @@ test.describe('Zoo Gate (backup, ⌥6)', () => {
     await expect(tally(page, 2)).toBeVisible();
   });
 
+  test('backup: Let in during the turn-away keeps the written-on list (the delayed list is cancelled)', async ({ page, request }) => {
+    await setCards(request, [PENGUIN, STAR_SPECIAL]);
+    await command(request, 'reset');
+    await openScene(page, 'gate', 2);
+    await phoneTap(request, STAR_SPECIAL.canonical_id);
+    await expect(page.locator('.zoo-special-denied')).toBeVisible();
+    await command(request, 'allow-special');
+    await expect(page.locator(`.zoo-list-new[data-id="${STAR_SPECIAL.canonical_id}"]`)).toBeVisible();
+    await page.waitForTimeout(3800); // past when the turn-away list would have popped up
+    await expect(page.locator(`.zoo-list-new[data-id="${STAR_SPECIAL.canonical_id}"]`)).toBeVisible();
+  });
+
+  test('backup: a badge tapped during the turn-away is not covered by the list', async ({ page, request }) => {
+    await setCards(request, [PENGUIN, STAR_SPECIAL]);
+    await command(request, 'reset');
+    await openScene(page, 'gate', 2);
+    await phoneTap(request, STAR_SPECIAL.canonical_id);
+    await expect(page.locator('.zoo-special-denied')).toBeVisible();
+    await phoneTap(request, PENGUIN.canonical_id);
+    await page.waitForTimeout(3800);
+    await expect(page.locator('.zoo-list')).toHaveCount(0);
+  });
+
   test('the special badge finale works in the backup too', async ({ page, request }) => {
     await setCards(request, [PENGUIN, STAR_SPECIAL]);
     await command(request, 'reset');

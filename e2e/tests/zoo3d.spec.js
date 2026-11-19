@@ -471,6 +471,19 @@ test.describe('special badge finale', () => {
     await expect(star).toHaveAttribute('data-status', 'waiting');
   });
 
+  test('a trick badge tapped during the turn-away gets its vote without the list on top', async ({ page, request }) => {
+    await openScene(page, 'zoo', 5);
+    await tapStar(request);
+    await expect.poll(() => gatekeeper(page)).toBe('no');
+    await phoneTap(request, FOX_TRICK.canonical_id);
+    await expect(page.locator('.zoo-vote')).toBeVisible({ timeout: 15000 });
+    await page.waitForTimeout(1500);
+    await expect(page.locator('.zoo-list')).toHaveCount(0);
+    await page.keyboard.press('Alt+y');
+    await expect.poll(() => inside(page), { timeout: 20000 }).toContain(FOX_TRICK.canonical_id);
+    await expect(page.locator('.zoo-list')).toHaveCount(0);
+  });
+
   test('the fixed picture shows on the next vote for that trick badge', async ({ page, request }) => {
     await uploadImage(request, FOX_TRICK.canonical_id);
     await request.put(`/api/cards/${FOX_TRICK.canonical_id}/reveal-image`, { data: PNG_1PX, headers: { 'content-type': 'image/png' } });

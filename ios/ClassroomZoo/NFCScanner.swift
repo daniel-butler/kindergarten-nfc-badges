@@ -79,6 +79,7 @@ final class NFCScanner: NSObject, ObservableObject {
 
     func stop() {
         stoppedByUser = true
+        hint = nil
         session?.invalidate()
     }
 

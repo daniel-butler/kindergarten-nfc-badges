@@ -52,7 +52,8 @@ struct RegisterView: View {
                 bigButton("Try again", tint: .orange, action: scan)
             }
         }
-        .sheet(isPresented: $showCamera) {
+        // Swiping the camera away mustn't leave a later photo saved as a real photo.
+        .sheet(isPresented: $showCamera, onDismiss: { revealFor = nil }) {
             CameraPicker { photo in
                 showCamera = false
                 if let card = revealFor {
@@ -127,6 +128,7 @@ struct RegisterView: View {
     }
 
     private func takePhoto(id: String, existing: CardDTO?) {
+        revealFor = nil
         cameraTarget = (id, existing)
         showCamera = true
     }

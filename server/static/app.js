@@ -1138,6 +1138,7 @@ function createZooFlow(h) {
   let pendingSince = 0;
   let deferred = []; // taps that arrived during the vote
   let early = null; // { letIn, cardId }: the phone decided before the vote card was up
+  let deniedList = null; // the 2D scene's Zoo List, waiting for the turn-away overlay to finish
 
   function applyEarly() {
     if (early && pending?.canonical_id === early.cardId) decide(early.letIn, early.cardId);
@@ -1155,11 +1156,13 @@ function createZooFlow(h) {
       }
     };
     if (h.listing) h.listing(show);
-    else if (afterDenial) Badge.later(show, DENIED_LIST_MS); // after the flat denial overlay
+    else if (afterDenial) deniedList = Badge.later(show, DENIED_LIST_MS); // after the flat denial overlay
     else show();
   }
 
   function tap(ev) {
+    // Anything tapped now has the class's attention: the list waits for another time.
+    Badge.cancel(deniedList);
     h.root().querySelector('.zoo-list')?.remove();
     if (pending) {
       if (ev.card) deferred.push(ev);
@@ -1255,6 +1258,7 @@ function createZooFlow(h) {
       if (pending && shown && !h.root().querySelector('.zoo-vote')) h.root().append(zooVoteOverlay(pending));
     },
     command(action, card) {
+      if (['allow-special', 'toggle-list', 'reset'].includes(action)) Badge.cancel(deniedList);
       if (action === 'let-in') decide(true, card);
       else if (action === 'keep-out') decide(false, card);
       else if (action === 'party') h.party();
@@ -2431,8 +2435,9 @@ Badge.registerScene((() => {
     });
     raising = false;
     if (gen !== generation) return;
-    // A badge tapped meanwhile closes the list, so don't open it over that arrival.
-    if (!queue.some((j) => j.act === 'arrive')) show();
+    // A badge tapped meanwhile (an arrival, a vote, an unknown badge) has the class's attention:
+    // don't open the list over it.
+    if (!queue.some((j) => j.act !== 'list')) show();
   }
 
   /** Trick badge: it walks up to the gate, the goose looks it over, then the class votes. */

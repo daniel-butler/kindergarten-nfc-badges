@@ -146,7 +146,7 @@ impl Registry {
     }
 
     /// Create or replace one card by canonical ID. Existing aliases are kept when the
-    /// incoming list is empty, and the existing image when the incoming one is absent.
+    /// incoming list is empty; its photos and fixed swap are always kept.
     pub fn upsert(&mut self, card: Card) -> Result<Card, String> {
         let incoming = validate(vec![card])?.remove(0);
         let id = incoming.canonical_id.clone();
@@ -158,17 +158,12 @@ impl Registry {
                 } else {
                     incoming.aliases.clone()
                 };
-                // The photos and the fixed swap belong to the server: an edit from the phone
-                // (which may not send them) keeps them as they are.
-                let image = incoming.image.clone().or_else(|| existing.image.clone());
-                let reveal_image = incoming
-                    .reveal_image
-                    .clone()
-                    .or_else(|| existing.reveal_image.clone());
+                // The photos and the fixed swap belong to the server (they change through the
+                // photo and fix endpoints): an edit, even from an old copy of the card, keeps them.
                 *existing = Card {
                     aliases,
-                    image,
-                    reveal_image,
+                    image: existing.image.clone(),
+                    reveal_image: existing.reveal_image.clone(),
                     fixed: existing.fixed,
                     ..incoming
                 };
@@ -645,6 +640,67 @@ mod tests {
             back.reveal_image.as_deref(),
             Some("/images/04976400092289-real.png?v=2")
         );
+    }
+
+    #[test]
+    fn photos_land_in_the_right_slot_while_fixed() {
+        let mut reg = temp_registry("reveal-slots");
+        let mut unicorn = card("04976400092289", &[], "🦄");
+        unicorn.role = Role::Trick;
+        reg.replace(vec![unicorn]).unwrap();
+        reg.set_image("04976400092289", PNG, 1).unwrap();
+        reg.set_reveal_image("04976400092289", PNG, 2).unwrap();
+        reg.fix("04976400092289").unwrap();
+        let retaken = reg.set_image("04976400092289", PNG, 3).unwrap();
+        assert_eq!(
+            retaken.reveal_image.as_deref(),
+            Some("/images/04976400092289.png?v=3"),
+            "the trick photo waits"
+        );
+        assert_eq!(
+            retaken.image.as_deref(),
+            Some("/images/04976400092289-real.png?v=2"),
+            "the real one still shows"
+        );
+        let real_again = reg.set_reveal_image("04976400092289", PNG, 4).unwrap();
+        assert_eq!(
+            real_again.image.as_deref(),
+            Some("/images/04976400092289-real.png?v=4")
+        );
+    }
+
+    #[test]
+    fn an_old_copy_of_a_card_cannot_flip_or_drop_its_photos() {
+        let mut reg = temp_registry("reveal-stale");
+        let mut unicorn = card("04976400092289", &[], "🦄");
+        unicorn.role = Role::Trick;
+        reg.replace(vec![unicorn.clone()]).unwrap();
+        let before_fix = reg.set_image("04976400092289", PNG, 1).unwrap();
+        reg.set_reveal_image("04976400092289", PNG, 2).unwrap();
+        let fixed = reg.fix("04976400092289").unwrap();
+        // A Register screen opened before the fix saves its old copy (💤 or Edit).
+        let mut stale = before_fix.clone();
+        stale.away = true;
+        let saved = reg.upsert(stale).unwrap();
+        assert!(saved.away);
+        assert_eq!(
+            (saved.image, saved.reveal_image, saved.fixed),
+            (fixed.image.clone(), fixed.reveal_image.clone(), true)
+        );
+        let mut stale_edit = before_fix;
+        stale_edit.reveal_image = None;
+        let saved = reg.upsert(stale_edit).unwrap();
+        assert_eq!(
+            (saved.image, saved.reveal_image),
+            (fixed.image, fixed.reveal_image)
+        );
+    }
+
+    #[test]
+    fn fixed_needs_a_real_photo_to_mean_anything() {
+        let mut c = card("04976400092289", &[], "🦄");
+        c.fixed = true;
+        assert!(!validate(vec![c]).unwrap()[0].fixed);
     }
 
     #[test]
