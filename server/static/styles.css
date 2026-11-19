@@ -532,10 +532,12 @@ button {
   border-radius: 2vmin;
   padding: 2vmin;
   font-size: 2.6vmin;
+  color: #fff; /* the panel is dark everywhere, even over the kid scenes' dark text */
   display: flex;
   flex-direction: column;
   gap: 0.6vmin;
 }
+#panel .version { opacity: 0.75; font-size: 2.2vmin; }
 
 #panel[hidden], #banner[hidden], #start[hidden] { display: none; }
 #panel h2 { margin: 1vmin 0 0; font-size: 3.2vmin; color: var(--accent); }

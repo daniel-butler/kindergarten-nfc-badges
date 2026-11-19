@@ -592,6 +592,16 @@ const Reader = (() => {
 
 const Panel = (() => {
   const panel = $('#panel');
+  let version = null; // which server build this page came from
+
+  async function loadVersion() {
+    try {
+      version = await (await fetch('/api/version')).json();
+      render();
+    } catch {
+      /* shown once the server answers */
+    }
+  }
 
   function fullscreen() {
     if (document.fullscreenElement) document.exitFullscreen();
@@ -600,6 +610,7 @@ const Panel = (() => {
 
   function toggle() {
     panel.hidden = !panel.hidden;
+    if (!panel.hidden) loadVersion(); // every time: the server may have been restarted with a new build
     render();
   }
 
@@ -617,6 +628,8 @@ const Panel = (() => {
     if (panel.hidden) return;
     const current = Badge.current;
     panel.replaceChildren(...[
+      el('div', { class: 'version' },
+        version ? `Version ${version.version}${version.date ? ` (${version.date})` : ''}` : 'Version …'),
       el('h2', {}, 'Scenes'),
       ...Badge.scenes.map((s) => button(s.name, `⌥${s.key}`, () => Badge.show(s.id), s === current)),
       el('h2', {}, 'Controls'),
@@ -1820,6 +1833,7 @@ Badge.registerScene((() => {
   const TITLE_AFTER_MS = 1500; // the party title waits for the balloons
   const CALM_AFTER_MS = 15000; // no taps for this long: everyone sits still while the presenter talks
   const BALLOONS = 16;
+  const SNORKEL_SIZE = 3.4; // about the animal's height, so the class can see it
   const PARTY_COLORS = ['#ff5d8f', '#ffd43b', '#4dabf7', '#69db7c', '#b197fc', '#ff922b'];
 
   let root;
@@ -2593,7 +2607,7 @@ Badge.registerScene((() => {
   function wearSnorkel() {
     const golden = [...animals.values()].find((a) => a.arrived && a.card.role === 'special');
     if (!golden || snorkel) return;
-    const sprite = emojiSprite('🤿', 2.3);
+    const sprite = emojiSprite('🤿', SNORKEL_SIZE);
     sprite.renderOrder = 10; // always drawn over its animal, never behind it
     sprite.material.depthTest = false;
     snorkel = { id: golden.card.canonical_id, sprite };
@@ -2650,7 +2664,7 @@ Badge.registerScene((() => {
         const snorkeling = finale && a.card.canonical_id === snorkel?.id;
         const ease = visiting ? 0.12 : calm ? 0.03 : snorkeling ? 0.3 : a.station?.name === 'grass' || finale ? 0.08 : 0.25;
         a.sprite.position.lerp(goal, ease);
-        if (snorkeling) snorkel.sprite.position.copy(a.sprite.position).add(V(0, ANIMAL_H * 0.15, 0.1));
+        if (snorkeling) snorkel.sprite.position.copy(a.sprite.position).add(V(0, ANIMAL_H * 0.12, 0.1));
         const since = now - a.bounceAt;
         if (since < 900) a.sprite.position.y += Math.abs(Math.sin((since / 900) * Math.PI * 2)) * 1.4;
       }
@@ -2829,6 +2843,7 @@ Badge.registerScene((() => {
       visitor,
       calm,
       snorkel: snorkel?.id ?? null,
+      snorkelSize: snorkel ? snorkel.sprite.scale.y : 0,
       models: {
         goose: !!w?.goose, padlock: !!w?.padlock.visible, clipboard: !!w?.goose.clipboard.visible,
         balloons: w ? w.balloons.length : 0,

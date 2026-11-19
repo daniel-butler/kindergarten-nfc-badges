@@ -129,6 +129,46 @@ test.describe('Debug and presenter panel', () => {
     await expect(row).toContainText('Penguin');
   });
 
+  test('the panel is readable over a kid scene: light text on its dark background', async ({ page }) => {
+    await openScene(page, 'list');
+    await page.keyboard.press('Alt+p');
+    const contrast = await page.evaluate(() => {
+      const lum = (rgb) => {
+        const [r, g, b] = rgb.match(/\d+/g).slice(0, 3).map((v) => {
+          const c = v / 255;
+          return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+        });
+        return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+      };
+      const ratio = (a, b) => (Math.max(lum(a), lum(b)) + 0.05) / (Math.min(lum(a), lum(b)) + 0.05);
+      const buttons = [...document.querySelectorAll('#panel button:not(.active)')];
+      return Math.min(...buttons.map((b) => ratio(getComputedStyle(b).color, getComputedStyle(b).backgroundColor)));
+    });
+    expect(contrast).toBeGreaterThan(4.5);
+  });
+
+  test('the panel shows which version of the server is running', async ({ page, request }) => {
+    const { version } = await (await request.get('/api/version')).json();
+    expect(version).toMatch(/^([0-9a-f]{7,}|unknown)/);
+    await openScene(page, 'zoo');
+    await page.keyboard.press('Alt+p');
+    await expect(page.locator('#panel')).toContainText(`Version ${version}`);
+  });
+
+  test('the panel asks for the version each time it opens (a restarted server has a new one)', async ({ page }) => {
+    let n = 0;
+    await page.route('**/api/version', (route) => {
+      n += 1;
+      return route.fulfill({ json: { version: n === 1 ? 'aaaaaaa' : 'bbbbbbb', date: 'Nov 19 07:00' } });
+    });
+    await openScene(page, 'zoo');
+    await page.keyboard.press('Alt+p');
+    await expect(page.locator('#panel')).toContainText('Version aaaaaaa (Nov 19 07:00)');
+    await page.keyboard.press('Alt+p');
+    await page.keyboard.press('Alt+p');
+    await expect(page.locator('#panel')).toContainText('Version bbbbbbb');
+  });
+
   test('panel shows the last unknown badge and has the zoo command buttons', async ({ page, request }) => {
     await setCards(request, [PENGUIN, LION, FOX_TRICK]);
     await command(request, 'reset');

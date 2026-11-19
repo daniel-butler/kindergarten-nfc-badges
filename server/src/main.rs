@@ -83,6 +83,14 @@ fn card_name(card: &Card) -> String {
 
 type ApiError = (StatusCode, String);
 
+/// The git commit this server was built from (see build.rs), e.g. `0a1fc72`.
+const VERSION: &str = env!("BADGE_VERSION");
+const VERSION_DATE: &str = env!("BADGE_VERSION_DATE");
+
+async fn get_version() -> Json<serde_json::Value> {
+    Json(serde_json::json!({ "version": VERSION, "date": VERSION_DATE }))
+}
+
 #[derive(Deserialize)]
 struct TapRequest {
     id: String,
@@ -536,7 +544,11 @@ async fn log_requests(req: Request, next: Next) -> Response {
         .get::<ConnectInfo<SocketAddr>>()
         .map_or_else(|| "?".to_string(), |c| c.0.ip().to_string());
     let started = Instant::now();
-    let response = next.run(req).await;
+    let mut response = next.run(req).await;
+    // The phone reads this to show which server it's talking to.
+    response
+        .headers_mut()
+        .insert("x-badge-version", header::HeaderValue::from_static(VERSION));
     let status = response.status();
     if !QUIET_PATHS.contains(&path.as_str()) || !status.is_success() {
         journal::write(
@@ -642,6 +654,7 @@ async fn main() {
         eprintln!("{e}");
         std::process::exit(1);
     });
+    println!("Version:         {VERSION} ({VERSION_DATE})");
     println!(
         "Cards file:      {} ({} cards)",
         registry.path().display(),
@@ -654,7 +667,10 @@ async fn main() {
     }
     journal::write(
         "server",
-        &format!("started with {} cards", registry.cards().len()),
+        &format!(
+            "started version {VERSION} with {} cards",
+            registry.cards().len()
+        ),
     );
 
     let (tx, _) = broadcast::channel(256);
@@ -691,6 +707,7 @@ async fn main() {
         .route("/images/{file}", get(get_image))
         .route("/api/link-mode", get(get_link_mode).put(put_link_mode))
         .route("/api/log", post(client_log))
+        .route("/api/version", get(get_version))
         .fallback(static_file)
         .layer(middleware::from_fn(log_requests))
         .with_state(state);

@@ -229,3 +229,9 @@ test('a trick badge gets its real photo; fix swaps it in, reset swaps it back', 
   expect((await getCards(request)).find((c) => c.canonical_id === id).fixed).toBeFalsy();
   expect((await request.post('/api/cards/04DEADBEEF0000/fix')).status()).toBe(404);
 });
+
+test('every response says which version of the server sent it', async ({ request }) => {
+  const res = await request.get('/api/cards');
+  const { version } = await (await request.get('/api/version')).json();
+  expect(res.headers()['x-badge-version']).toBe(version);
+});

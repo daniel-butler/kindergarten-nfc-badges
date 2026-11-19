@@ -298,14 +298,23 @@ enum TapClient {
         return decoded(await send(URLRequest(url: url, timeoutInterval: 3)), as: PresenterDTO.self)
     }
 
-    /// GET /api/cards: is the Mac there, and how many badges does it know?
-    static func ping(server: String) async -> Result<Int, Error> {
+    /// Which build of the server sent a response (its git commit), or nil for an older server.
+    static func serverVersion(from response: HTTPURLResponse) -> String? {
+        response.value(forHTTPHeaderField: "X-Badge-Version")
+    }
+
+    /// GET /api/cards: is the Mac there, how many badges does it know, and which version is it?
+    static func ping(server: String) async -> Result<(badges: Int, version: String?), Error> {
         guard let url = endpoint(server: server, path: "/api/cards") else { return .failure(Failure.badURL(server)) }
-        return await send(URLRequest(url: url, timeoutInterval: 4)).flatMap { data in
-            guard let cards = (try? JSONSerialization.jsonObject(with: data)) as? [Any] else {
-                return .failure(Failure.server(200, "unexpected reply"))
+        do {
+            let (data, response) = try await URLSession.shared.data(for: URLRequest(url: url, timeoutInterval: 4))
+            let http = response as? HTTPURLResponse
+            guard http?.statusCode == 200, let cards = (try? JSONSerialization.jsonObject(with: data)) as? [Any] else {
+                return .failure(Failure.server(http?.statusCode ?? 0, "unexpected reply"))
             }
-            return .success(cards.count)
+            return .success((cards.count, http.flatMap(serverVersion)))
+        } catch {
+            return .failure(error)
         }
     }
 }
