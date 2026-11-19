@@ -245,7 +245,7 @@ enum TapClient {
         ("⌥1", "Setup"), ("⌥2", "Secret Number"), ("⌥3", "Zoo (3D)"), ("⌥4", "The List"),
         ("⌥5", "Who has the ___?"), ("⌥6", "Zoo Gate (2D backup)"), ("⌥0", "Debug"),
         ("⌥L", "Show / hide the Zoo List"), ("⌥Y", "Let in (trick vote)"), ("⌥N", "Keep out (trick vote)"),
-        ("⌥A", "Allow special badge"), ("⌥S", "Start the party (zoo) · next animal (Who has)"),
+        ("⌥A", "Allow golden badge"), ("⌥S", "Start the party (zoo) · next animal (Who has)"),
         ("⌥R ⌥R", "Reset the zoo (press twice)"), ("⌥P", "Presenter panel"), ("⌥F", "Fullscreen"),
         ("⌥M", "Mute"), ("⌥T", "Typing test mode"),
     ]

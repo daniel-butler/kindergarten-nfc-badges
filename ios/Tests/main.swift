@@ -1,5 +1,5 @@
 // Mac-side checks for TapClient (no phone needed):
-//   swiftc ClassroomZoo/TapClient.swift ClassroomZoo/StickerEdges.swift Tests/*.swift -o /tmp/tapcheck && /tmp/tapcheck
+//   swiftc ClassroomZoo/TapClient.swift ClassroomZoo/StickerEdges.swift ClassroomZoo/ScanPolicy.swift Tests/*.swift -o /tmp/tapcheck && /tmp/tapcheck
 // With BADGE_SCRATCH_SERVER=http://localhost:8181 set, it also talks to a running server. That
 // registers a test 🐼 Panda trick badge and sends taps, so point it at a throwaway server (e.g.
 // one started with --cards /tmp/scratch/cards.json), never the classroom one.
@@ -23,6 +23,13 @@ check(TapClient.hexID(Data([0x00, 0x0F])) == "000F", "hexID keeps leading zeros"
 check(TapClient.endpoint(server: "172.20.10.2:8080", path: "/tap")?.absoluteString == "http://172.20.10.2:8080/tap", "adds http://")
 check(TapClient.endpoint(server: " http://mac.local:8080/ ", path: "/tap")?.absoluteString == "http://mac.local:8080/tap", "trims spaces and slash")
 check(TapClient.endpoint(server: "", path: "/tap") == nil, "empty server is nil")
+
+// iOS ends a scan session after ~60 s: Check in keeps scanning unless someone stopped it.
+check(ScanPolicy.restartAfterEnd(reason: .timedOut, stoppedByUser: false, registering: false), "a timed-out scan restarts")
+check(!ScanPolicy.restartAfterEnd(reason: .timedOut, stoppedByUser: true, registering: false), "Stop means stop")
+check(!ScanPolicy.restartAfterEnd(reason: .canceled, stoppedByUser: false, registering: false), "Cancel on the scan sheet means stop")
+check(!ScanPolicy.restartAfterEnd(reason: .timedOut, stoppedByUser: false, registering: true), "registering scans one badge, no restart")
+check(!ScanPolicy.restartAfterEnd(reason: .other, stoppedByUser: false, registering: false), "other errors don't loop")
 
 let logBody = try! JSONSerialization.jsonObject(with: TapClient.logBody(lines: ["10:15:59.123 app active"])) as! [String: Any]
 check(logBody["source"] as? String == "phone" && logBody["lines"] as? [String] == ["10:15:59.123 app active"],

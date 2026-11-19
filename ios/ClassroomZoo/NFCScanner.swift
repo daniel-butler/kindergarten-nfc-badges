@@ -35,6 +35,8 @@ final class NFCScanner: NSObject, ObservableObject {
     private var lastSent: (id: String, at: Date)?
     /// Scanning stopped so the decision buttons can be tapped (the NFC sheet covers them).
     private var pausedForDecision = false
+    /// The presenter tapped Stop: don't start again on our own.
+    private var stoppedByUser = false
     private let haptics = UINotificationFeedbackGenerator()
     #if DEBUG
     /// UI tests run in the simulator, which has no NFC: ZOO_FAKE_TAGS="ID1,ID2" stands in for
@@ -65,6 +67,7 @@ final class NFCScanner: NSObject, ObservableObject {
         session.alertMessage = message
         self.session = session
         session.begin()
+        stoppedByUser = false
         AppLog.log(onceHandler == nil ? "NFC scanning started" : "NFC scanning for one badge to register")
         isScanning = true
         status = "Scanning…"
@@ -72,6 +75,7 @@ final class NFCScanner: NSObject, ObservableObject {
     }
 
     func stop() {
+        stoppedByUser = true
         session?.invalidate()
     }
 
@@ -130,7 +134,7 @@ final class NFCScanner: NSObject, ObservableObject {
         AppLog.log("waiting for the presenter: \(decision.kind) \(decision.card.label)")
         guard let session else { return }
         pausedForDecision = true
-        session.alertMessage = decision.kind == "trick" ? "🎭 Trick badge! Decide on the phone." : "⭐ Special badge! Decide on the phone."
+        session.alertMessage = decision.kind == "trick" ? "🎭 Trick badge! Decide on the phone." : "⭐ Golden badge! Decide on the phone."
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { session.invalidate() }
     }
 
@@ -173,6 +177,7 @@ final class NFCScanner: NSObject, ObservableObject {
     }
 
     fileprivate func ended(_ error: Error) {
+        let registering = onceHandler != nil
         onceHandler = nil
         isScanning = false
         session = nil
@@ -180,6 +185,21 @@ final class NFCScanner: NSObject, ObservableObject {
         if pausedForDecision {
             pausedForDecision = false
             status = "Decide below 👇"
+            return
+        }
+        let code = (error as? NFCReaderError)?.code
+        let reason: ScanPolicy.EndReason = switch code {
+        case .readerSessionInvalidationErrorSessionTimeout: .timedOut
+        case .readerSessionInvalidationErrorUserCanceled: .canceled
+        default: .other
+        }
+        if ScanPolicy.restartAfterEnd(reason: reason, stoppedByUser: stoppedByUser, registering: registering) {
+            AppLog.log("scan timed out: starting again")
+            status = "Scanning…"
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+                guard let self, !self.stoppedByUser, self.session == nil, self.decision == nil else { return }
+                self.start()
+            }
             return
         }
         switch (error as? NFCReaderError)?.code {

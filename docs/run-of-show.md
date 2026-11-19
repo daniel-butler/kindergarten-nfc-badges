@@ -20,7 +20,7 @@ You also bring:
 | **Mystery badge #1** | Only an animal sticker (a cat). No NFC. | Nothing (there's nothing to read) |
 | **Mystery badge #2** | Only a special sticker. No animal. | A normal card with **badge #1's cat** photographed as its sticker |
 | **Trick badges** (3) | Special sticker that "says the wrong thing" | 🎭 Trick: one with the wrong color, one the wrong animal, one both wrong |
-| **Golden badge** | Any animal | ⭐ Special role (call it the **golden badge** out loud) |
+| **Golden badge** | Any animal | ⭐ Golden role (stored as `special`) (call it the **golden badge** out loud) |
 
 ## Who does what
 

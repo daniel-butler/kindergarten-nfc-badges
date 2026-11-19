@@ -76,6 +76,12 @@ struct ContentView: View {
                     scanner.stop()
                     AppLog.log("mode → \(mode.rawValue)")
                 }
+                // Walking between kids shouldn't lock the phone and end the scan.
+                .onChange(of: mode, initial: true) {
+                    let awake = mode == .checkIn
+                    UIApplication.shared.isIdleTimerDisabled = awake
+                    AppLog.log(awake ? "screen stays awake on Check in" : "screen can sleep again")
+                }
 
                 switch mode {
                 case .register: RegisterView(server: serverURL, scanner: scanner)
@@ -123,7 +129,7 @@ struct ContentView: View {
                     }
                     .frame(width: 80, height: 80)
                     VStack(alignment: .leading, spacing: 4) {
-                        Text(d.kind == "trick" ? "🎭 Trick badge" : "⭐ Special badge").font(.headline)
+                        Text(d.kind == "trick" ? "🎭 Trick badge" : "⭐ Golden badge").font(.headline)
                         Text(d.card.label).font(.title.bold())
                     }
                     Spacer()

@@ -38,7 +38,7 @@ Shortcuts always use **Option (⌥)** so the reader can never trigger them.
 | ⌥L | Show / hide the Zoo List |
 | ⌥Y | 👍 Let in (trick vote) |
 | ⌥N | 👎 Keep out (trick vote) |
-| ⌥A | ⭐ Allow the special badge |
+| ⌥A | ⭐ Allow the golden badge |
 | ⌥S | Start the party (zoo scenes) / next animal (Who has) |
 | ⌥R ⌥R | Reset the zoo (press twice within 3 s) |
 | ⌥P | Presenter panel (also: click the invisible top-right corner) |
@@ -56,12 +56,12 @@ Set a role when registering a badge, in Zookeeper's **Register** tab or in **⌥
 - **Normal:** walks into the zoo and adds a tally mark.
 - **🎭 Trick:** the stored animal or color is deliberately wrong (photograph a spare sticker for
   it, or pick a different color). The class votes on it.
-- **⭐ Special:** any animal you choose. It's denied until you allow it, and its entry starts the
+- **⭐ Golden:** any animal you choose. It's denied until you allow it, and its entry starts the
   party.
 - **💤 Not here today:** set from the phone for badges you're holding back. Those animals stay out
   of the zoo and of Who has the ___?. If that badge is tapped later, it checks in as normal.
 
-Roles only matter in the zoo scenes. Everywhere else, trick and special badges act like any other
+Roles only matter in the zoo scenes. Everywhere else, trick and golden badges act like any other
 card.
 
 ## The scenes
@@ -75,7 +75,9 @@ card.
   bounce with hearts, and it joins the slide, swings, seesaw, merry-go-round or grass. Several taps
   in a row queue up and arrive faster.
 - **Tally:** marks at the top, in groups of five. One mark for each normal entry, each trick badge
-  voted in, and the special badge.
+  voted in, and the golden badge.
+- **Calm while you talk:** after 15 seconds with no taps, everyone strolls to a spot on the grass
+  and sits still, and the goose stops nodding. The next tap or command wakes the zoo up.
 - **Unknown badge:** a blank "?" card hops up to the gate and the goose tilts its head, then a
   small "Oops! Tap again 🔄" with a soft boop. Nobody goes in.
 - **Tapping again when already inside:** that animal runs to the gate and waves hello through the
@@ -90,20 +92,20 @@ card.
   - **Keep out:** the goose honks and waves a wing, and the sticker hops away under a "Bye-bye!"
     sign. Kept out isn't final: that badge's next tap gets a new vote.
   - Taps that arrive during a vote wait their turn.
-- **⭐ Special badge:**
+- **⭐ Golden badge:**
   - At first it's denied: it peeks at the gate, a big gold padlock pops onto the doors and wobbles,
     and the goose honks and shakes its head.
   - Press **⌥A** (Allow): the goose holds up its clipboard at the gate, then the **Zoo List** pops
-    up, and a pencil scribbles the special badge in. The list shows every badge: ✅ in the zoo,
-    an empty box for not in yet, ❌ not on the list (the special before it's allowed, a trick voted
+    up, and a pencil scribbles the golden badge in. The list shows every badge: ✅ in the zoo,
+    an empty box for not in yet, ❌ not on the list (the golden badge before it's allowed, a trick voted
     out), and 💤 not here today. (If an animal is still
     walking in, the list waits for it.) **⌥L** shows the list the same way.
-  - The special badge's next tap walks it in, adds a mark, and **starts the party**. **⌥S** starts
+  - The golden badge's next tap walks it in, adds a mark, and **starts the party**. **⌥S** starts
     the party any time.
 - **🎉 Party:** balloons float up, everyone dances in a ring with the goose in the middle, then
   "Congratulations, Official Zookeepers!" appears.
 - **Saved:** check-ins survive a page reload. **⌥R ⌥R**, or Reset on the phone, clears everything
-  and denies the special badge again.
+  and denies the golden badge again.
 
 ### 🏰 Zoo Gate (⌥6, backup)
 
@@ -141,18 +143,18 @@ the last unknown badge's ID.
 
 ## Deciding while you scan (Zookeeper → Check in)
 
-When you scan a 🎭 trick or ⭐ special badge on **Check in**, scanning pauses and the screen shows
+When you scan a 🎭 trick or ⭐ golden badge on **Check in**, scanning pauses and the screen shows
 that badge with big buttons: **👍 Let in / 👎 Keep out** for a trick, **⭐ Allow / Not yet** for the
-special badge. Tap one and scanning starts again by itself. You can tap as soon as the buttons
+golden badge. Tap one and scanning starts again by itself. You can tap as soon as the buttons
 appear: the zoo applies it once the class has seen the vote card.
 
 ## The phone remote (Zookeeper → Presenter)
 
 <img src="images/phone-presenter.jpg" alt="Presenter tab" width="260" align="right">
 
-- **Buttons:** 👍 Let in / 👎 Keep out, ⭐ Allow special, 📋 Zoo List, 🎉 Party, every scene, and
+- **Buttons:** 👍 Let in / 👎 Keep out, ⭐ Allow golden, 📋 Zoo List, 🎉 Party, every scene, and
   🔄 Reset (asks to confirm).
-- **Waiting card:** the trick or special badge waiting for you (sticker, name and raw ID), and the
+- **Waiting card:** the trick or golden badge waiting for you (sticker, name and raw ID), and the
   last unknown badge's ID.
 - **Help:** lists every Mac shortcut, for when the phone can't reach the Mac.
 
@@ -181,7 +183,7 @@ everything in **⌥0 Debug**.
 - [ ] Start it with `--cards ~/cards.json` (photos are saved in `~/images/`).
 - [ ] Zookeeper is on the iPhone (reinstall from Xcode if it won't open).
 - [ ] Zookeeper → **Register**: scan each badge, snap its sticker, name it, and pick its cardstock
-      color and role. Three 🎭 trick badges (photograph a spare sticker for them) and one ⭐ special.
+      color and role. Three 🎭 trick badges (photograph a spare sticker for them) and one ⭐ golden.
 - [ ] Tap every badge on the **USB reader** with ⌥1 Setup open. For any that show the picker
       instead of the card: tap it on the phone, then on the reader within 5 s, to link them.
 - [ ] Back up `cards.json` and the `images/` folder.
@@ -189,7 +191,7 @@ everything in **⌥0 Debug**.
   - ⌥2, then ⌥3, and a few check-ins.
   - An unknown sticker (gentle retry).
   - A trick vote each way.
-  - The special badge (denied → Allow → party).
+  - The golden badge (denied → Allow → party).
   - Finish with **Reset**.
 - [ ] Make sure ⌥3 runs smoothly on the Mac. If it doesn't, use ⌥6, the 2D backup.
 

@@ -39,7 +39,7 @@ struct PresenterView: View {
                 commandButton("👍 Let in", "let-in", tint: .green)
                 commandButton("👎 Keep out", "keep-out", tint: .red)
             }
-            commandButton("⭐ Allow special", "allow-special", tint: .orange)
+            commandButton("⭐ Allow golden", "allow-special", tint: .orange)
             HStack(spacing: 12) {
                 commandButton("📋 Zoo List", "toggle-list", tint: .blue)
                 commandButton("🎉 Party", "party", tint: .purple)
@@ -63,7 +63,7 @@ struct PresenterView: View {
             .confirmationDialog("Reset the zoo?", isPresented: $confirmReset, titleVisibility: .visible) {
                 Button("Reset", role: .destructive) { run("reset") }
             } message: {
-                Text("Clears the tally, everyone inside, the trick votes and the party, and denies the special badge again.")
+                Text("Clears the tally, everyone inside, the trick votes and the party, and denies the golden badge again.")
             }
 
             if let status {
@@ -83,7 +83,7 @@ struct PresenterView: View {
                     HStack(spacing: 14) {
                         art(waiting.card).frame(width: 72, height: 72)
                         VStack(alignment: .leading, spacing: 4) {
-                            Text(waiting.kind == "special" ? "⭐ Special badge waiting" : "🎭 Trick badge waiting")
+                            Text(waiting.kind == "special" ? "⭐ Golden badge waiting" : "🎭 Trick badge waiting")
                                 .font(.headline)
                             Text(waiting.card.label).font(.title2.bold())
                             Text(waiting.raw_id).font(.system(.footnote, design: .monospaced)).textSelection(.enabled)
