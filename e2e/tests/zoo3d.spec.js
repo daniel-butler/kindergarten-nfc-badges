@@ -109,18 +109,21 @@ test('a new sticker photo arriving while that animal walks in: it still ends up 
 });
 
 test('the zoo goes calm when nobody taps for a while, and the next tap wakes it', async ({ page, request }) => {
-  test.setTimeout(60000);
+  test.setTimeout(90000);
   await openScene(page, 'zoo', 4);
   await phoneTap(request, PENGUIN.canonical_id);
   await expect.poll(() => inside(page), { timeout: 15000 }).toContain(PENGUIN.canonical_id);
   expect((await zooState(page)).calm).toBe(false);
   await expect.poll(async () => (await zooState(page)).calm, { timeout: 25000 }).toBe(true);
-  // Settled: everyone sits still while the presenter talks.
-  await page.waitForTimeout(4000);
-  const before = (await zooState(page)).heights;
-  await page.waitForTimeout(1500);
-  const after = (await zooState(page)).heights;
-  expect(Math.abs(after[PENGUIN.canonical_id] - before[PENGUIN.canonical_id])).toBeLessThan(0.01);
+  // Everyone strolls to the grass, then sits still while the presenter talks. How long the stroll
+  // takes depends on the frame rate (slow on CI's software 3D), so wait for it to stop.
+  const height = async () => (await zooState(page)).heights[PENGUIN.canonical_id];
+  await expect.poll(async () => {
+    const before = await height();
+    await page.waitForTimeout(1000);
+    return Math.abs((await height()) - before);
+  }, { timeout: 30000 }).toBeLessThan(0.01);
+  expect((await zooState(page)).calm).toBe(true);
   await phoneTap(request, LION.canonical_id);
   await expect.poll(async () => (await zooState(page)).calm).toBe(false);
 });
