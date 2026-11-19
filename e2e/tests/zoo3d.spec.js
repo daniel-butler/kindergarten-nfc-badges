@@ -451,6 +451,8 @@ test.describe('special badge finale', () => {
     await tapStar(request);
     await expect(page.locator('.zoo3d-finale')).toBeVisible({ timeout: 20000 });
     expect((await zooState(page)).snorkel).toBe(STAR_SPECIAL.canonical_id);
+    // Big enough to see from the back of the classroom: about the animal's own height.
+    expect((await zooState(page)).snorkelSize).toBeGreaterThanOrEqual(3);
     // Bigger hops than the other dancers. Compare in the same samples: CI's software 3D draws only
     // a few frames a second, which shrinks everyone's measured hops alike.
     const samples = [];
