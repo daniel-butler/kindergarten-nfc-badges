@@ -117,9 +117,23 @@ final class ClassroomZooUITests: XCTestCase {
         app.buttons["Start Scanning"].tap()
         XCTAssert(text(app, "⭐ Golden badge").waitForExistence(timeout: wait))
         XCTAssert(app.buttons["Not yet"].exists)
-        app.buttons["⭐ Allow"].tap()
+        app.buttons["👍 Let in"].tap()
+        // It's on the list now; walking in takes one more scan.
+        XCTAssert(label(app, startingWith: "✅ On the list").waitForExistence(timeout: wait))
+    }
+
+    /// Kept out a trick badge that has its real photo: one tap fixes the picture.
+    func testCheckInFixesPicture() {
+        let app = launch(mode: "Check in")
+        app.buttons["Start Scanning"].tap()
+        XCTAssert(text(app, "🎭 Trick badge").waitForExistence(timeout: wait))
+        app.buttons["👎 Keep out"].tap()
+        let fix = app.buttons["🔧 Fix the picture"]
+        XCTAssert(fix.waitForExistence(timeout: wait), "after Keep out, the picture can be fixed")
+        XCTAssert(app.buttons["Skip"].exists)
+        fix.tap()
         let gone = NSPredicate(format: "exists == false")
-        expectation(for: gone, evaluatedWith: app.buttons["⭐ Allow"])
+        expectation(for: gone, evaluatedWith: fix)
         waitForExpectations(timeout: wait)
     }
 

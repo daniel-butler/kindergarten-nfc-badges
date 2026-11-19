@@ -21,6 +21,8 @@ struct RegisterView: View {
     @State private var lifted = true
     @State private var showCamera = false
     @State private var cameraTarget: (id: String, existing: CardDTO?)?
+    /// Set when the camera is taking a trick badge's real photo (for the reveal).
+    @State private var revealFor: CardDTO?
     @State private var name = ""
     @State private var color: ColorDTO?
     @State private var role = "normal"
@@ -50,9 +52,15 @@ struct RegisterView: View {
                 bigButton("Try again", tint: .orange, action: scan)
             }
         }
-        .sheet(isPresented: $showCamera) {
+        // Swiping the camera away mustn't leave a later photo saved as a real photo.
+        .sheet(isPresented: $showCamera, onDismiss: { revealFor = nil }) {
             CameraPicker { photo in
                 showCamera = false
+                if let card = revealFor {
+                    revealFor = nil
+                    if let photo { saveRevealPhoto(photo, for: card) }
+                    return
+                }
                 guard let photo, let target = cameraTarget else { return }
                 step = .looking
                 Task {
@@ -92,6 +100,26 @@ struct RegisterView: View {
         }
     }
 
+    private func saveRevealPhoto(_ photo: UIImage, for card: CardDTO) {
+        step = .looking
+        Task {
+            let lifted = await StickerCutout.lift(photo)
+            guard let png = lifted.image.pngData() else {
+                step = .failed("Couldn't read the photo")
+                return
+            }
+            switch await TapClient.uploadRevealImage(png, id: card.canonical_id, server: server) {
+            case .success(let saved):
+                AppLog.log("register: real photo for \(saved.label) saved")
+                haptics.notificationOccurred(.success)
+                step = .existing(saved)
+            case .failure(let error):
+                AppLog.log("register: real photo for \(card.label) failed: \(error.localizedDescription)")
+                step = .failed(error.localizedDescription)
+            }
+        }
+    }
+
     private func startDetails(id: String, existing: CardDTO?) {
         name = existing?.label ?? ""
         color = existing?.color
@@ -100,6 +128,7 @@ struct RegisterView: View {
     }
 
     private func takePhoto(id: String, existing: CardDTO?) {
+        revealFor = nil
         cameraTarget = (id, existing)
         showCamera = true
     }
@@ -173,6 +202,15 @@ struct RegisterView: View {
                 Button("✏️ Edit") { startDetails(id: card.canonical_id, existing: card) }
             }
             .buttonStyle(.bordered)
+            if card.role == "trick" {
+                Button(card.reveal_image == nil ? "📸 Real photo (for the reveal)" : "📸 Retake real photo ✓") {
+                    revealFor = card
+                    showCamera = true
+                }
+                .buttonStyle(.bordered)
+                Text("After you keep it out, Check in can swap this real photo in with one tap.")
+                    .font(.footnote).foregroundStyle(.secondary).multilineTextAlignment(.center)
+            }
             bigButton("📛 Scan next badge", tint: .blue, action: scan)
         }
     }

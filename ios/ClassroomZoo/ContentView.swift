@@ -129,19 +129,25 @@ struct ContentView: View {
                     }
                     .frame(width: 80, height: 80)
                     VStack(alignment: .leading, spacing: 4) {
-                        Text(d.kind == "trick" ? "🎭 Trick badge" : "⭐ Golden badge").font(.headline)
+                        Text(["trick": "🎭 Trick badge", "fix": "🔧 Kept out"][d.kind] ?? "⭐ Golden badge").font(.headline)
                         Text(d.card.label).font(.title.bold())
                     }
                     Spacer()
                 }
-                if d.kind == "trick" {
+                switch d.kind {
+                case "trick":
                     HStack(spacing: 12) {
                         decisionButton("👍 Let in", tint: .green) { decide(d, "let-in") }
                         decisionButton("👎 Keep out", tint: .red) { decide(d, "keep-out") }
                     }
-                } else {
+                case "fix":
                     HStack(spacing: 12) {
-                        decisionButton("⭐ Allow", tint: .orange) { decide(d, "allow-special") }
+                        decisionButton("🔧 Fix the picture", tint: .blue) { fixPicture(d) }
+                        decisionButton("Skip", tint: .gray) { decide(d, nil) }
+                    }
+                default:
+                    HStack(spacing: 12) {
+                        decisionButton("👍 Let in", tint: .green) { decide(d, "allow-special") }
                         decisionButton("Not yet", tint: .gray) { decide(d, nil) }
                     }
                 }
@@ -170,10 +176,30 @@ struct ContentView: View {
                     return
                 }
             } else {
-                AppLog.log("check in: not yet for \(d.card.label)")
+                AppLog.log("check in: \(d.kind == "fix" ? "skipped fixing" : "not yet for") \(d.card.label)")
             }
             scanner.serverURL = serverURL
-            scanner.decided()
+            if action == "keep-out", d.card.canFix {
+                // The real photo is ready: offer to swap it in right away.
+                scanner.decision = NFCScanner.Decision(kind: "fix", card: d.card)
+                return
+            }
+            scanner.decided(hint: action == "allow-special" ? "✅ On the list! Scan \(d.card.label) again to let it in." : nil)
+        }
+    }
+
+    /// One tap: the trick badge's real photo replaces the trick photo, then scanning carries on.
+    private func fixPicture(_ d: NFCScanner.Decision) {
+        Task {
+            switch await TapClient.fix(id: d.card.canonical_id, server: serverURL) {
+            case .success:
+                AppLog.log("check in: fixed the picture of \(d.card.label)")
+                scanner.serverURL = serverURL
+                scanner.decided(hint: "🔧 Fixed! Scan \(d.card.label) again for a new vote.")
+            case .failure(let error):
+                AppLog.log("check in: fixing \(d.card.label) failed: \(error.localizedDescription)")
+                scanner.status = "⚠️ \(error.localizedDescription): try again"
+            }
         }
     }
 
@@ -211,6 +237,13 @@ struct ContentView: View {
 
                 Text(scanner.status)
                     .font(.headline)
+
+                if let hint = scanner.hint {
+                    Text(hint)
+                        .font(.title3.bold())
+                        .multilineTextAlignment(.center)
+                        .foregroundStyle(.green)
+                }
 
                 GroupBox("Last badge") {
                     VStack(spacing: 8) {

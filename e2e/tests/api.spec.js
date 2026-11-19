@@ -209,3 +209,23 @@ test('a command can name the badge it is for, and the page hears which', async (
   await request.post('/api/command', { data: { action: 'let-in', card: '04:ca:fe:f0:0d:be:ef' } });
   await expect.poll(() => page.evaluate(() => window.__commands)).toContainEqual({ action: 'let-in', card: '04CAFEF00DBEEF' });
 });
+
+test('a trick badge gets its real photo; fix swaps it in, reset swaps it back', async ({ request }) => {
+  await setCards(request, [PENGUIN, FOX_TRICK]);
+  const id = FOX_TRICK.canonical_id;
+  expect((await request.post(`/api/cards/${id}/fix`)).status()).toBe(409); // no real photo yet
+  await uploadImage(request, id);
+  const withReal = await request.put(`/api/cards/${id}/reveal-image`, { data: PNG_1PX, headers: { 'content-type': 'image/png' } });
+  expect(withReal.status()).toBe(200);
+  const real = (await withReal.json()).reveal_image;
+  expect(real).toMatch(new RegExp(`^/images/${id}-real\\.png\\?v=\\d+$`));
+  expect((await request.get(real)).status()).toBe(200);
+  const trick = (await getCards(request)).find((c) => c.canonical_id === id).image;
+
+  const fixed = await (await request.post(`/api/cards/${id}/fix`)).json();
+  expect(fixed).toMatchObject({ fixed: true, image: real, reveal_image: trick });
+  await command(request, 'reset');
+  expect((await getCards(request)).find((c) => c.canonical_id === id)).toMatchObject({ image: trick, reveal_image: real });
+  expect((await getCards(request)).find((c) => c.canonical_id === id).fixed).toBeFalsy();
+  expect((await request.post('/api/cards/04DEADBEEF0000/fix')).status()).toBe(404);
+});

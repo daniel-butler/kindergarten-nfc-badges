@@ -319,6 +319,21 @@ async fn resolve_card(
     Ok(Json(ResolveResponse { canonical_id, card }))
 }
 
+fn image_error(e: ImageError, id: &str) -> ApiError {
+    match e {
+        ImageError::NotFound => (StatusCode::NOT_FOUND, format!("no card {id}")),
+        ImageError::NotPng => (
+            StatusCode::UNSUPPORTED_MEDIA_TYPE,
+            "image must be a PNG".to_string(),
+        ),
+        ImageError::TooLarge => (
+            StatusCode::PAYLOAD_TOO_LARGE,
+            "image is over 5 MB".to_string(),
+        ),
+        ImageError::Io(e) => (StatusCode::INTERNAL_SERVER_ERROR, e),
+    }
+}
+
 async fn put_card_image(
     State(state): State<AppState>,
     Path(id): Path<String>,
@@ -327,24 +342,51 @@ async fn put_card_image(
     let id = ids::normalize(&id).ok_or((StatusCode::NOT_FOUND, "no such card".to_string()))?;
     let kb = body.len() / 1024;
     let saved = mutate(&state, |reg| {
-        reg.set_image(&id, &body, now_ms()).map_err(|e| match e {
-            ImageError::NotFound => (StatusCode::NOT_FOUND, format!("no card {id}")),
-            ImageError::NotPng => (
-                StatusCode::UNSUPPORTED_MEDIA_TYPE,
-                "image must be a PNG".to_string(),
-            ),
-            ImageError::TooLarge => (
-                StatusCode::PAYLOAD_TOO_LARGE,
-                "image is over 5 MB".to_string(),
-            ),
-            ImageError::Io(e) => (StatusCode::INTERNAL_SERVER_ERROR, e),
-        })
+        reg.set_image(&id, &body, now_ms())
+            .map_err(|e| image_error(e, &id))
     })?;
     journal::write(
         "server",
         &format!("photo for {} ({kb} KB)", card_name(&saved)),
     );
     Ok(Json(saved))
+}
+
+async fn put_card_reveal_image(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    body: Bytes,
+) -> Result<Json<Card>, ApiError> {
+    let id = ids::normalize(&id).ok_or((StatusCode::NOT_FOUND, "no such card".to_string()))?;
+    let kb = body.len() / 1024;
+    let saved = mutate(&state, |reg| {
+        reg.set_reveal_image(&id, &body, now_ms())
+            .map_err(|e| image_error(e, &id))
+    })?;
+    journal::write(
+        "server",
+        &format!("real photo for {} ({kb} KB)", card_name(&saved)),
+    );
+    Ok(Json(saved))
+}
+
+/// "Fix the picture": a trick badge's real photo takes the trick photo's place.
+async fn fix_card(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<Json<Card>, ApiError> {
+    let id = ids::normalize(&id).ok_or((StatusCode::NOT_FOUND, "no such card".to_string()))?;
+    let fixed = mutate(&state, |reg| {
+        if reg.find(&id).is_none() {
+            return Err((StatusCode::NOT_FOUND, format!("no card {id}")));
+        }
+        reg.fix(&id).map_err(|e| (StatusCode::CONFLICT, e))
+    })?;
+    journal::write(
+        "server",
+        &format!("fixed the picture of {}", card_name(&fixed)),
+    );
+    Ok(Json(fixed))
 }
 
 async fn get_presenter(State(state): State<AppState>) -> Json<PresenterState> {
@@ -379,6 +421,11 @@ async fn command(
                     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
                 if action == "reset" {
                     inner.presenter = PresenterState::default();
+                    // Trick badges whose picture was fixed show their trick photo again.
+                    inner
+                        .registry
+                        .unfix_all()
+                        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
                 }
                 Some(inner.registry.cards().to_vec())
             }
@@ -417,6 +464,7 @@ async fn clear_away(State(state): State<AppState>) -> Result<Json<Vec<Card>>, Ap
 /// Serves sticker cutouts. Only `<HEX>.png` names, so nothing else on disk is reachable.
 async fn get_image(State(state): State<AppState>, Path(file): Path<String>) -> Response {
     let valid = file.strip_suffix(".png").is_some_and(|name| {
+        let name = name.strip_suffix("-real").unwrap_or(name);
         !name.is_empty()
             && name
                 .chars()
@@ -635,6 +683,11 @@ async fn main() {
             "/api/cards/{id}/image",
             put(put_card_image).layer(DefaultBodyLimit::max(MAX_IMAGE_BYTES + 1024)),
         )
+        .route(
+            "/api/cards/{id}/reveal-image",
+            put(put_card_reveal_image).layer(DefaultBodyLimit::max(MAX_IMAGE_BYTES + 1024)),
+        )
+        .route("/api/cards/{id}/fix", post(fix_card))
         .route("/images/{file}", get(get_image))
         .route("/api/link-mode", get(get_link_mode).put(put_link_mode))
         .route("/api/log", post(client_log))

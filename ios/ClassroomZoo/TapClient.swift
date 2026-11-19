@@ -18,9 +18,12 @@ struct CardDTO: Codable, Equatable {
     var allowed: Bool
     var away: Bool
     var image: String?
+    /// Trick badges: the real photo, swapped in by "Fix the picture" (while `fixed`, the trick photo).
+    var reveal_image: String?
+    var fixed: Bool?
 
     private enum CodingKeys: String, CodingKey {
-        case canonical_id, aliases, emoji, label, color, role, allowed, away, image
+        case canonical_id, aliases, emoji, label, color, role, allowed, away, image, reveal_image, fixed
     }
 
     private enum LegacyKeys: String, CodingKey {
@@ -52,7 +55,12 @@ struct CardDTO: Codable, Equatable {
         allowed = try c.decodeIfPresent(Bool.self, forKey: .allowed) ?? false
         away = try c.decodeIfPresent(Bool.self, forKey: .away) ?? false
         image = try c.decodeIfPresent(String.self, forKey: .image)
+        reveal_image = try c.decodeIfPresent(String.self, forKey: .reveal_image)
+        fixed = try c.decodeIfPresent(Bool.self, forKey: .fixed)
     }
+
+    /// A trick badge whose real photo is ready to swap in.
+    var canFix: Bool { role == "trick" && reveal_image != nil && fixed != true }
 }
 
 /// What the Presenter tab shows: the badge waiting for a decision, and the last unknown badge.
@@ -237,6 +245,28 @@ enum TapClient {
         request.httpMethod = "PUT"
         request.setValue("image/png", forHTTPHeaderField: "Content-Type")
         request.httpBody = png
+        return decoded(await send(request), as: CardDTO.self)
+    }
+
+    /// A trick badge's real photo, swapped in later by `fix`.
+    static func uploadRevealImage(_ png: Data, id: String, server: String) async -> Result<CardDTO, Error> {
+        guard let url = endpoint(server: server, path: "/api/cards/\(id)/reveal-image") else {
+            return .failure(Failure.badURL(server))
+        }
+        var request = URLRequest(url: url, timeoutInterval: 20)
+        request.httpMethod = "PUT"
+        request.setValue("image/png", forHTTPHeaderField: "Content-Type")
+        request.httpBody = png
+        return decoded(await send(request), as: CardDTO.self)
+    }
+
+    /// "Fix the picture": the trick badge's real photo takes the trick photo's place.
+    static func fix(id: String, server: String) async -> Result<CardDTO, Error> {
+        guard let url = endpoint(server: server, path: "/api/cards/\(id)/fix") else {
+            return .failure(Failure.badURL(server))
+        }
+        var request = URLRequest(url: url, timeoutInterval: 4)
+        request.httpMethod = "POST"
         return decoded(await send(request), as: CardDTO.self)
     }
 

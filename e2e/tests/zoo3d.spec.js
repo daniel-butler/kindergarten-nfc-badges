@@ -1,6 +1,7 @@
 const { test, expect } = require('@playwright/test');
 const {
   STAR_SPECIAL, getCards, PENGUIN, LION, FOX_TRICK, manyCards, command, setCards, phoneTap, openScene, reloadPage, scene, uploadImage,
+  PNG_1PX,
 } = require('./helpers');
 
 const OWL_AWAY = { canonical_id: '04BEEFBEEFBEEF', emoji: '🦉', label: 'Owl', color: { hex: '#8D6E63', name: 'Brown' }, away: true };
@@ -442,20 +443,69 @@ test.describe('special badge finale', () => {
 
   test('at the party the golden badge animal wears a snorkel and bounces around', async ({ page, request }) => {
     await openScene(page, 'zoo', 5);
+    await phoneTap(request, PENGUIN.canonical_id); // someone to dance with
+    await expect.poll(() => inside(page), { timeout: 20000 }).toContain(PENGUIN.canonical_id);
     await command(request, 'allow-special');
     await expect(page.locator('.zoo-list')).toBeVisible({ timeout: 15000 });
     expect((await zooState(page)).snorkel).toBe(null);
     await tapStar(request);
     await expect(page.locator('.zoo3d-finale')).toBeVisible({ timeout: 20000 });
     expect((await zooState(page)).snorkel).toBe(STAR_SPECIAL.canonical_id);
-    // Bigger hops than the other dancers (theirs top out at 1.2). Sample for a while: on CI's
-    // software 3D only a few frames a second are drawn, so short sampling can miss the top.
-    const heights = [];
+    // Bigger hops than the other dancers. Compare in the same samples: CI's software 3D draws only
+    // a few frames a second, which shrinks everyone's measured hops alike.
+    const samples = [];
     for (let i = 0; i < 50; i++) {
-      heights.push((await zooState(page)).heights[STAR_SPECIAL.canonical_id]);
+      samples.push((await zooState(page)).heights);
       await page.waitForTimeout(100);
     }
-    expect(Math.max(...heights) - Math.min(...heights)).toBeGreaterThan(1.2);
+    const range = (id) => {
+      const hs = samples.map((h) => h[id]);
+      return Math.max(...hs) - Math.min(...hs);
+    };
+    const others = Object.keys(samples[0]).filter((id) => id !== STAR_SPECIAL.canonical_id);
+    expect(others).toContain(PENGUIN.canonical_id);
+    const golden = range(STAR_SPECIAL.canonical_id);
+    expect(golden).toBeGreaterThan(0.3);
+    expect(golden).toBeGreaterThan(Math.max(...others.map(range)));
+  });
+
+  test('turned away, the golden badge is shown not on the Zoo List; Let in writes it on', async ({ page, request }) => {
+    await openScene(page, 'zoo', 5);
+    await tapStar(request);
+    // After the goose says no, the list pops up by itself with the golden badge crossed out.
+    const star = page.locator(`.zoo-list-item[data-id="${STAR_SPECIAL.canonical_id}"]`);
+    await expect(star).toHaveAttribute('data-status', 'unlisted', { timeout: 15000 });
+    await expect(star.locator('.zoo-list-mark')).toHaveText('❌');
+    await command(request, 'allow-special');
+    await expect(page.locator(`.zoo-list-new[data-id="${STAR_SPECIAL.canonical_id}"]`)).toBeVisible({ timeout: 15000 });
+    await expect(star).toHaveAttribute('data-status', 'waiting');
+  });
+
+  test('a trick badge tapped during the turn-away gets its vote without the list on top', async ({ page, request }) => {
+    await openScene(page, 'zoo', 5);
+    await tapStar(request);
+    await expect.poll(() => gatekeeper(page)).toBe('no');
+    await phoneTap(request, FOX_TRICK.canonical_id);
+    await expect(page.locator('.zoo-vote')).toBeVisible({ timeout: 15000 });
+    await page.waitForTimeout(1500);
+    await expect(page.locator('.zoo-list')).toHaveCount(0);
+    await page.keyboard.press('Alt+y');
+    await expect.poll(() => inside(page), { timeout: 20000 }).toContain(FOX_TRICK.canonical_id);
+    await expect(page.locator('.zoo-list')).toHaveCount(0);
+  });
+
+  test('the fixed picture shows on the next vote for that trick badge', async ({ page, request }) => {
+    await uploadImage(request, FOX_TRICK.canonical_id);
+    await request.put(`/api/cards/${FOX_TRICK.canonical_id}/reveal-image`, { data: PNG_1PX, headers: { 'content-type': 'image/png' } });
+    await openScene(page, 'zoo', 5);
+    await phoneTap(request, FOX_TRICK.canonical_id);
+    await expect(page.locator('.zoo-vote')).toBeVisible({ timeout: 10000 });
+    await page.waitForTimeout(1100);
+    await page.keyboard.press('Alt+n');
+    await request.post(`/api/cards/${FOX_TRICK.canonical_id}/fix`);
+    await expect.poll(() => gatekeeper(page), { timeout: 10000 }).toBe('idle');
+    await phoneTap(request, FOX_TRICK.canonical_id);
+    await expect(page.locator('.zoo-vote img')).toHaveAttribute('src', new RegExp(`${FOX_TRICK.canonical_id}-real\\.png`), { timeout: 10000 });
   });
 
   test('Option+L shows and hides the Zoo List', async ({ page }) => {

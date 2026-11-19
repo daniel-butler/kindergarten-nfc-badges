@@ -115,6 +115,8 @@ mod tests {
             legacy_trick: false,
             allowed,
             image: None,
+            reveal_image: None,
+            fixed: false,
             away: false,
         }
     }

@@ -31,6 +31,14 @@ check(!ScanPolicy.restartAfterEnd(reason: .canceled, stoppedByUser: false, regis
 check(!ScanPolicy.restartAfterEnd(reason: .timedOut, stoppedByUser: false, registering: true), "registering scans one badge, no restart")
 check(!ScanPolicy.restartAfterEnd(reason: .other, stoppedByUser: false, registering: false), "other errors don't loop")
 
+// A trick badge with its real photo, fixed: the phone keeps both fields, and doesn't send them
+// for a card that doesn't have them (the server owns them).
+let fixedTrick = ##"{"canonical_id":"04CA","aliases":[],"emoji":"🦄","label":"Unicorn","color":{"hex":"#43A047","name":"Green"},"role":"trick","allowed":false,"away":false,"image":"/images/04CA-real.png?v=2","reveal_image":"/images/04CA.png?v=1","fixed":true}"##
+let unicorn = try! JSONDecoder().decode(CardDTO.self, from: Data(fixedTrick.utf8))
+check(unicorn.fixed == true && unicorn.reveal_image == "/images/04CA.png?v=1", "a card's real photo and fixed flag decode")
+let plain = String(data: try! JSONEncoder().encode(CardDTO(canonical_id: "04CA", emoji: "🦄", label: "Unicorn", color: ColorDTO(hex: "#43A047", name: "Green"))), encoding: .utf8)!
+check(!plain.contains("reveal_image") && !plain.contains("fixed"), "a card without them doesn't send them: \(plain)")
+
 let logBody = try! JSONSerialization.jsonObject(with: TapClient.logBody(lines: ["10:15:59.123 app active"])) as! [String: Any]
 check(logBody["source"] as? String == "phone" && logBody["lines"] as? [String] == ["10:15:59.123 app active"],
       "log body matches the server's /api/log")

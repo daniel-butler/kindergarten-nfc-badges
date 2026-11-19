@@ -146,6 +146,8 @@ mod tests {
             legacy_trick: false,
             allowed: false,
             image: None,
+            reveal_image: None,
+            fixed: false,
             away: false,
         }])
         .unwrap();

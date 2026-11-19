@@ -145,9 +145,16 @@ the last unknown badge's ID.
 ## Deciding while you scan (Zookeeper → Check in)
 
 When you scan a 🎭 trick or ⭐ golden badge on **Check in**, scanning pauses and the screen shows
-that badge with big buttons: **👍 Let in / 👎 Keep out** for a trick, **⭐ Allow / Not yet** for the
+that badge with big buttons: **👍 Let in / 👎 Keep out** for a trick, **👍 Let in / Not yet** for the
 golden badge. Tap one and scanning starts again by itself. You can tap as soon as the buttons
 appear: the zoo applies it once the class has seen the vote card.
+
+- **Fix the picture:** a trick badge with a **real photo** (added in Register) offers
+  **🔧 Fix the picture** after you keep it out. One tap swaps the real photo in on the projector;
+  scan it again for a new vote. **Reset** puts the trick photo back.
+- **Golden badge:** after it's turned away, the Zoo List pops up with it ❌ not on the list.
+  **Let in** writes it on; the phone then says "✅ On the list! Scan … again", and that scan walks
+  it in and starts the party.
 
 ## The phone remote (Zookeeper → Presenter)
 

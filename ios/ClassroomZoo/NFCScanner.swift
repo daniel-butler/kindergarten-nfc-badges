@@ -21,8 +21,11 @@ final class NFCScanner: NSObject, ObservableObject {
     /// A trick or special badge just scanned that the presenter decides about on this screen.
     @Published var decision: Decision?
 
+    /// What to tell the presenter next, e.g. that the golden badge needs one more scan.
+    @Published var hint: String?
+
     struct Decision: Equatable {
-        /// "trick" or "special".
+        /// "trick", "special", or "fix" (a kept-out trick badge whose picture can be fixed).
         let kind: String
         let card: CardDTO
     }
@@ -76,11 +79,13 @@ final class NFCScanner: NSObject, ObservableObject {
 
     func stop() {
         stoppedByUser = true
+        hint = nil
         session?.invalidate()
     }
 
     fileprivate func handle(id: String, session: NFCTagReaderSession) {
         lastID = id
+        hint = nil
         AppLog.log("badge read \(id)")
         if let done = onceHandler {
             onceHandler = nil
@@ -139,9 +144,11 @@ final class NFCScanner: NSObject, ObservableObject {
     }
 
     /// The presenter decided: scanning starts again.
-    func decided() {
+    /// `hint` stays on screen and on the scan sheet until the next badge is read.
+    func decided(hint: String? = nil) {
         decision = nil
-        start()
+        self.hint = hint
+        if let hint { start(message: hint) } else { start() }
     }
 
     #if DEBUG
@@ -154,6 +161,7 @@ final class NFCScanner: NSObject, ObservableObject {
                 try? await Task.sleep(nanoseconds: 300_000_000)
                 fakeTags?.removeFirst()
                 lastID = id
+                hint = nil
                 AppLog.log("badge read \(id) (test badge)")
                 if let done = onceHandler {
                     onceHandler = nil

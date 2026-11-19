@@ -4,7 +4,7 @@ const path = require('node:path');
 const { execFile } = require('node:child_process');
 const { promisify } = require('node:util');
 const { test, expect } = require('@playwright/test');
-const { PENGUIN, FOX_TRICK, STAR_SPECIAL, getCards, command, setCards, phoneTap, openScene, logLines, relay } = require('./helpers');
+const { PENGUIN, FOX_TRICK, STAR_SPECIAL, getCards, command, setCards, phoneTap, openScene, logLines, relay, uploadImage, PNG_1PX } = require('./helpers');
 
 const run = promisify(execFile);
 const IOS = path.resolve(__dirname, '../../ios');
@@ -169,6 +169,17 @@ test('scanning a trick badge on Check in: Let in right there, and it walks into 
   await phone('testCheckInDecidesTrick', { tags: [FOX_TRICK.canonical_id], expect: 'Fox' });
   await expect(tally(page, 1)).toBeVisible({ timeout: 10000 });
   await expect.poll(() => inside(page), { timeout: 20000 }).toContain(FOX_TRICK.canonical_id);
+});
+
+test('Check in: keep out a trick badge, fix its picture in one tap, and the real one shows', async ({ page, request }) => {
+  await uploadImage(request, FOX_TRICK.canonical_id);
+  await request.put(`/api/cards/${FOX_TRICK.canonical_id}/reveal-image`, { data: PNG_1PX, headers: { 'content-type': 'image/png' } });
+  await openScene(page, 'zoo', 3);
+  await phone('testCheckInFixesPicture', { tags: [FOX_TRICK.canonical_id] });
+  await expect.poll(async () => (await getCards(request)).find((c) => c.canonical_id === FOX_TRICK.canonical_id).fixed).toBe(true);
+  await expect.poll(() => page.evaluate((id) => window.Badge.cards.find((c) => c.canonical_id === id).image, FOX_TRICK.canonical_id))
+    .toMatch(new RegExp(`${FOX_TRICK.canonical_id}-real\\.png`));
+  expect(await inside(page)).toEqual([]); // kept out; its next scan gets a new vote
 });
 
 test('scanning the special badge on Check in: Allow right there, and its next tap starts the party', async ({ page, request }) => {
