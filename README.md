@@ -55,6 +55,7 @@ No hardware yet? Press **⌥T** and type a badge ID, or `curl` a tap; see the
 
 ## Learn more
 
+- 🎬 **[Run of show](docs/run-of-show.md)**: the 30-minute lesson, step by step.
 - 🎤 **[Presenter guide](docs/presenter-guide.md)**: lesson flow, every scene, keyboard shortcuts,
   the phone remote, and a pre-class checklist.
 - 🛠️ **[Setup guide](docs/setup.md)**: running the server, the iPhone hotspot, installing Zookeeper,

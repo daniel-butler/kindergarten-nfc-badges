@@ -4,12 +4,16 @@
 
 ## Lesson flow
 
-1. **Opening:** tap a bare NFC sticker on **⌥2 Secret Number** to show the number hidden inside.
-2. **Mystery badges** are handed out.
-3. **Kids tap into the zoo** (**⌥3**). The tally grows with every animal.
-4. **Trick badge votes:** thumbs up or down for each trick badge.
-5. **Golden-badge finale:** denied → you add it to the Zoo List → it walks in → **party!**
-6. Kids decorate their badges while you take questions.
+The full script, step by step, is the **[run of show](run-of-show.md)**. In short:
+
+1. Intro, then Charlotte hands out the mystery badges.
+2. **Everyone scans in** (**⌥3**) with the phone: animals walk in, the tally grows.
+3. "How did the computer know it was YOUR animal?"
+4. **Mystery badge #1** (animal only) does nothing; **mystery badge #2** (special sticker only)
+   brings in a cat. The computer reads the special sticker, not the animal.
+5. **Trick badge votes:** thumbs up or down for each.
+6. **Golden badge finale:** turned away → you allow it → it walks in → **party!**
+7. Kids decorate their badges while you take questions.
 
 ## The projector page
 
