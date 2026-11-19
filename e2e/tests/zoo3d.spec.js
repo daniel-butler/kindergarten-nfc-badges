@@ -440,6 +440,23 @@ test.describe('special badge finale', () => {
     await expect(item(OWL_AWAY).locator('.zoo-list-mark')).toHaveText('💤');
   });
 
+  test('at the party the golden badge animal wears a snorkel and bounces around', async ({ page, request }) => {
+    await openScene(page, 'zoo', 5);
+    await command(request, 'allow-special');
+    await expect(page.locator('.zoo-list')).toBeVisible({ timeout: 15000 });
+    expect((await zooState(page)).snorkel).toBe(null);
+    await tapStar(request);
+    await expect(page.locator('.zoo3d-finale')).toBeVisible({ timeout: 20000 });
+    expect((await zooState(page)).snorkel).toBe(STAR_SPECIAL.canonical_id);
+    // Bigger hops than the others: sample its height for a couple of seconds.
+    const heights = [];
+    for (let i = 0; i < 20; i++) {
+      heights.push((await zooState(page)).heights[STAR_SPECIAL.canonical_id]);
+      await page.waitForTimeout(100);
+    }
+    expect(Math.max(...heights) - Math.min(...heights)).toBeGreaterThan(1.5);
+  });
+
   test('Option+L shows and hides the Zoo List', async ({ page }) => {
     await openScene(page, 'zoo', 5);
     await page.keyboard.press('Alt+l');

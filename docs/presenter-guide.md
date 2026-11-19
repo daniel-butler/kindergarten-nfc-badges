@@ -102,7 +102,8 @@ card.
     walking in, the list waits for it.) **⌥L** shows the list the same way.
   - The golden badge's next tap walks it in, adds a mark, and **starts the party**. **⌥S** starts
     the party any time.
-- **🎉 Party:** balloons float up, everyone dances in a ring with the goose in the middle, then
+- **🎉 Party:** balloons float up, everyone dances in a ring with the goose in the middle (the
+  golden badge animal puts on a 🤿 snorkel and bounces around), then
   "Congratulations, Official Zookeepers!" appears.
 - **Saved:** check-ins survive a page reload. **⌥R ⌥R**, or Reset on the phone, clears everything
   and denies the golden badge again.

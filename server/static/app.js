@@ -1822,6 +1822,7 @@ Badge.registerScene((() => {
   let raising = false; // the goose is lifting its clipboard
   let lastActivity = performance.now(); // last tap or command; long enough ago means calm
   let calm = false;
+  let snorkel = null; // { id, sprite }: the golden badge animal's party snorkel
   let visitor = null; // canonical_id of a sticker turned away at the gate
   let generation = 0;
   let hud;
@@ -2572,6 +2573,18 @@ Badge.registerScene((() => {
     w.goose.clipboard.visible = false;
     setCam(PARTY_VIEW);
     launchBalloons();
+    wearSnorkel();
+  }
+
+  /** The golden badge animal puts on a snorkel for the party. */
+  function wearSnorkel() {
+    const golden = [...animals.values()].find((a) => a.arrived && a.card.role === 'special');
+    if (!golden || snorkel) return;
+    const sprite = emojiSprite('🤿', 2.3);
+    sprite.renderOrder = 10; // always drawn over its animal, never behind it
+    sprite.material.depthTest = false;
+    snorkel = { id: golden.card.canonical_id, sprite };
+    w.scene.add(sprite);
   }
 
   function showTitle() {
@@ -2607,6 +2620,10 @@ Badge.registerScene((() => {
         a.sprite.material.rotation = visiting ? Math.sin(secs * 14) * 0.18 : 0; // waving hello
         if (visiting) {
           target = V(0, Math.abs(Math.sin(secs * 6)) * 1.8, GATE_Z - 1.6); // hops to see over the bars
+        } else if (finale && a.card.canonical_id === snorkel?.id) {
+          // Snorkel on, bouncing around the middle of the party.
+          const ang = secs * 1.3;
+          target = V(Math.cos(ang) * 3, Math.abs(Math.sin(secs * 6)) * 3, Math.sin(ang) * 3 + 1);
         } else if (finale) {
           const ang = (i / all.length) * Math.PI * 2 + secs * 0.4;
           target = V(Math.cos(ang) * 6, Math.abs(Math.sin(secs * 4 + i)) * 1.2, Math.sin(ang) * 5 + 1);
@@ -2617,8 +2634,10 @@ Badge.registerScene((() => {
           target = V(Math.cos(ang) * r, 0, Math.sin(ang) * r + 1);
         } else target = (a.station || w.stations.at(-1)).pos(a.slot, secs);
         const goal = target.clone().setY(target.y + ANIMAL_H / 2);
-        const ease = visiting ? 0.12 : calm ? 0.03 : a.station?.name === 'grass' || finale ? 0.08 : 0.25;
+        const snorkeling = finale && a.card.canonical_id === snorkel?.id;
+        const ease = visiting ? 0.12 : calm ? 0.03 : snorkeling ? 0.3 : a.station?.name === 'grass' || finale ? 0.08 : 0.25;
         a.sprite.position.lerp(goal, ease);
+        if (snorkeling) snorkel.sprite.position.copy(a.sprite.position).add(V(0, ANIMAL_H * 0.15, 0.1));
         const since = now - a.bounceAt;
         if (since < 900) a.sprite.position.y += Math.abs(Math.sin((since / 900) * Math.PI * 2)) * 1.4;
       }
@@ -2673,6 +2692,7 @@ Badge.registerScene((() => {
     busy = false;
     gatekeeper = 'idle';
     visitor = null;
+    snorkel = null;
     voteDecided = null;
     raising = false;
     animals = new Map();
@@ -2795,6 +2815,7 @@ Badge.registerScene((() => {
       gatekeeper,
       visitor,
       calm,
+      snorkel: snorkel?.id ?? null,
       models: {
         goose: !!w?.goose, padlock: !!w?.padlock.visible, clipboard: !!w?.goose.clipboard.visible,
         balloons: w ? w.balloons.length : 0,
