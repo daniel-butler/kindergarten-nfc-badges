@@ -1128,6 +1128,8 @@ function zooListOverlay(state, scribble) {
  * something before calling show() for the vote card, the Zoo List or the retry pill, and voted()
  * when the vote is decided.
  */
+const DENIED_LIST_MS = 3300; // the 2D denial overlay shows for 3.2 s
+
 function createZooFlow(h) {
   const keptOut = h.keptOut || ((card) => zooGoose(h.root(), card));
   const denied = h.denied || ((card) => zooSpecialDenied(h.root(), card));
@@ -1141,7 +1143,8 @@ function createZooFlow(h) {
     if (early && pending?.canonical_id === early.cardId) decide(early.letIn, early.cardId);
   }
 
-  function showList(scribble) {
+  /** `afterDenial`: the golden badge was just turned away, so the list follows that moment. */
+  function showList(scribble, afterDenial = false) {
     const show = () => {
       const root = h.root();
       root.querySelector('.zoo-list')?.remove();
@@ -1152,6 +1155,7 @@ function createZooFlow(h) {
       }
     };
     if (h.listing) h.listing(show);
+    else if (afterDenial) Badge.later(show, DENIED_LIST_MS); // after the flat denial overlay
     else show();
   }
 
@@ -1170,7 +1174,11 @@ function createZooFlow(h) {
         return h.unknown ? h.unknown(retry) : retry();
       }
       case 'inside': return h.inside(card);
-      case 'special-denied': return denied(card);
+      case 'special-denied':
+        denied(card);
+        // Then the Zoo List, so the class sees it isn't on the list (yet).
+        showList(false, true);
+        return;
       case 'vote': {
         pending = card;
         pendingSince = Infinity; // can't be decided until the class sees the vote card

@@ -58,6 +58,8 @@ test.describe('Zoo Gate (backup, ⌥6)', () => {
     await phoneTap(request, STAR_SPECIAL.canonical_id);
     await expect(page.locator('.zoo-special-denied')).toBeVisible();
     await expect(tally(page, 0)).toBeVisible();
+    // Then the Zoo List pops up with it crossed out.
+    await expect(page.locator(`.zoo-list-item[data-id="${STAR_SPECIAL.canonical_id}"]`)).toHaveAttribute('data-status', 'unlisted', { timeout: 10000 });
     await page.keyboard.press('Alt+a');
     await expect(page.locator('.zoo-list-new')).toBeVisible();
     await page.waitForTimeout(1600); // same badge again within 1.5 s counts as a repeat

@@ -31,7 +31,9 @@ as SSE `command` events, so both paths behave the same.
 | GET    | `/api/presenter` | `{ waiting: { kind: "trick"\|"special", card, raw_id, ts } \| null, last_unknown: { raw_id, ts } \| null }` |
 | POST   | `/api/log`       | `{ "source": "page"\|"phone", "lines": [..] }` → 204, appended to `badge-server.log` |
 | POST   | `/api/command` | `{ "action": "let-in" }` → broadcast as SSE `command`. Actions: `scene-setup scene-secret scene-zoo scene-list scene-who scene-gate scene-debug toggle-list let-in keep-out allow-special party reset` |
-| GET    | `/images/<id>.png` | sticker photos |
+| PUT    | `/api/cards/{id}/reveal-image` | `image/png`: a trick badge's real photo → `images/<id>-real.png` |
+| POST   | `/api/cards/{id}/fix` | swap the real photo in (`fixed: true`); `409` without one. Reset swaps it back |
+| GET    | `/images/<id>.png` | sticker photos (and `<id>-real.png`) |
 | GET/PUT| `/api/link-mode` | `{"enabled":true}` turns on alias linking (the Setup scene does this) |
 
 - **Tap event:** `{ raw_id, canonical_id, source, card: Card|null, ts, linked? }`

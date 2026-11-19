@@ -1,6 +1,7 @@
 const { test, expect } = require('@playwright/test');
 const {
   STAR_SPECIAL, getCards, PENGUIN, LION, FOX_TRICK, manyCards, command, setCards, phoneTap, openScene, reloadPage, scene, uploadImage,
+  PNG_1PX,
 } = require('./helpers');
 
 const OWL_AWAY = { canonical_id: '04BEEFBEEFBEEF', emoji: '🦉', label: 'Owl', color: { hex: '#8D6E63', name: 'Brown' }, away: true };
@@ -456,6 +457,32 @@ test.describe('special badge finale', () => {
       await page.waitForTimeout(100);
     }
     expect(Math.max(...heights) - Math.min(...heights)).toBeGreaterThan(1.2);
+  });
+
+  test('turned away, the golden badge is shown not on the Zoo List; Let in writes it on', async ({ page, request }) => {
+    await openScene(page, 'zoo', 5);
+    await tapStar(request);
+    // After the goose says no, the list pops up by itself with the golden badge crossed out.
+    const star = page.locator(`.zoo-list-item[data-id="${STAR_SPECIAL.canonical_id}"]`);
+    await expect(star).toHaveAttribute('data-status', 'unlisted', { timeout: 15000 });
+    await expect(star.locator('.zoo-list-mark')).toHaveText('❌');
+    await command(request, 'allow-special');
+    await expect(page.locator(`.zoo-list-new[data-id="${STAR_SPECIAL.canonical_id}"]`)).toBeVisible({ timeout: 15000 });
+    await expect(star).toHaveAttribute('data-status', 'waiting');
+  });
+
+  test('the fixed picture shows on the next vote for that trick badge', async ({ page, request }) => {
+    await uploadImage(request, FOX_TRICK.canonical_id);
+    await request.put(`/api/cards/${FOX_TRICK.canonical_id}/reveal-image`, { data: PNG_1PX, headers: { 'content-type': 'image/png' } });
+    await openScene(page, 'zoo', 5);
+    await phoneTap(request, FOX_TRICK.canonical_id);
+    await expect(page.locator('.zoo-vote')).toBeVisible({ timeout: 10000 });
+    await page.waitForTimeout(1100);
+    await page.keyboard.press('Alt+n');
+    await request.post(`/api/cards/${FOX_TRICK.canonical_id}/fix`);
+    await expect.poll(() => gatekeeper(page), { timeout: 10000 }).toBe('idle');
+    await phoneTap(request, FOX_TRICK.canonical_id);
+    await expect(page.locator('.zoo-vote img')).toHaveAttribute('src', new RegExp(`${FOX_TRICK.canonical_id}-real\\.png`), { timeout: 10000 });
   });
 
   test('Option+L shows and hides the Zoo List', async ({ page }) => {

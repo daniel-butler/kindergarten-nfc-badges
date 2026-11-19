@@ -23,6 +23,13 @@ pub struct Card {
     /// Served URL of the sticker cutout, e.g. `/images/04A1B2C3D4E5F6.png?v=1731871234000`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub image: Option<String>,
+    /// Trick badges: the sticker's real photo, swapped in ("fix the picture") once the class has
+    /// seen through the trick. While `fixed`, the two have traded places: `image` is the real
+    /// photo and this holds the trick photo, ready for Reset to swap back.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reveal_image: Option<String>,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub fixed: bool,
     /// "Not here today": left out of the zoo count until this badge is tapped.
     #[serde(default)]
     pub away: bool,
@@ -52,10 +59,12 @@ pub enum ImageError {
     Io(String),
 }
 
-/// Only URLs this server hands out are kept, so a saved card can't point the page elsewhere.
+/// Only URLs this server hands out are kept, so a saved card can't point the page elsewhere:
+/// `/images/<HEX>.png?v=<ms>`, or `<HEX>-real.png` for a trick badge's real photo.
 fn is_image_url(url: &str) -> bool {
     url.strip_prefix("/images/")
         .and_then(|rest| rest.split_once(".png?v="))
+        .map(|(name, version)| (name.strip_suffix("-real").unwrap_or(name), version))
         .is_some_and(|(name, version)| {
             !name.is_empty()
                 && name
@@ -149,10 +158,18 @@ impl Registry {
                 } else {
                     incoming.aliases.clone()
                 };
+                // The photos and the fixed swap belong to the server: an edit from the phone
+                // (which may not send them) keeps them as they are.
                 let image = incoming.image.clone().or_else(|| existing.image.clone());
+                let reveal_image = incoming
+                    .reveal_image
+                    .clone()
+                    .or_else(|| existing.reveal_image.clone());
                 *existing = Card {
                     aliases,
                     image,
+                    reveal_image,
+                    fixed: existing.fixed,
                     ..incoming
                 };
             }
@@ -184,9 +201,75 @@ impl Registry {
         std::fs::create_dir_all(&dir).map_err(|e| ImageError::Io(e.to_string()))?;
         write_atomic(&dir.join(format!("{canonical_id}.png")), png).map_err(ImageError::Io)?;
         let mut cards = self.cards.clone();
-        cards[idx].image = Some(format!("/images/{canonical_id}.png?v={version_ms}"));
+        let url = Some(format!("/images/{canonical_id}.png?v={version_ms}"));
+        // While fixed, the badge's own (trick) photo waits in `reveal_image`.
+        if cards[idx].fixed {
+            cards[idx].reveal_image = url;
+        } else {
+            cards[idx].image = url;
+        }
         self.replace(cards).map_err(ImageError::Io)?;
         Ok(self.cards[idx].clone())
+    }
+
+    /// Store a trick badge's real photo (`<id>-real.png`), to swap in with `fix`.
+    pub fn set_reveal_image(
+        &mut self,
+        canonical_id: &str,
+        png: &[u8],
+        version_ms: u64,
+    ) -> Result<Card, ImageError> {
+        if png.len() > MAX_IMAGE_BYTES {
+            return Err(ImageError::TooLarge);
+        }
+        if !png.starts_with(&PNG_SIGNATURE) {
+            return Err(ImageError::NotPng);
+        }
+        let idx = self
+            .cards
+            .iter()
+            .position(|c| c.canonical_id == canonical_id)
+            .ok_or(ImageError::NotFound)?;
+        let dir = self.images_dir();
+        std::fs::create_dir_all(&dir).map_err(|e| ImageError::Io(e.to_string()))?;
+        write_atomic(&dir.join(format!("{canonical_id}-real.png")), png).map_err(ImageError::Io)?;
+        let mut cards = self.cards.clone();
+        let url = Some(format!("/images/{canonical_id}-real.png?v={version_ms}"));
+        if cards[idx].fixed {
+            cards[idx].image = url;
+        } else {
+            cards[idx].reveal_image = url;
+        }
+        self.replace(cards).map_err(ImageError::Io)?;
+        Ok(self.cards[idx].clone())
+    }
+
+    /// "Fix the picture": the badge's real photo takes the trick photo's place.
+    pub fn fix(&mut self, canonical_id: &str) -> Result<Card, String> {
+        let mut cards = self.cards.clone();
+        let card = cards
+            .iter_mut()
+            .find(|c| c.canonical_id == canonical_id)
+            .ok_or_else(|| format!("no card {canonical_id}"))?;
+        if !card.fixed {
+            if card.reveal_image.is_none() {
+                return Err(format!("{} has no real photo to swap in", card.label));
+            }
+            std::mem::swap(&mut card.image, &mut card.reveal_image);
+            card.fixed = true;
+        }
+        self.replace(cards)?;
+        Ok(self.find(canonical_id).expect("just saved").clone())
+    }
+
+    /// Reset: every fixed badge shows its trick photo again.
+    pub fn unfix_all(&mut self) -> Result<(), String> {
+        let mut cards = self.cards.clone();
+        for c in cards.iter_mut().filter(|c| c.fixed) {
+            std::mem::swap(&mut c.image, &mut c.reveal_image);
+            c.fixed = false;
+        }
+        self.replace(cards)
     }
 
     /// Allow (or deny again) every special badge.
@@ -207,7 +290,7 @@ impl Registry {
         self.replace(cards)
     }
 
-    fn find(&self, canonical_id: &str) -> Option<&Card> {
+    pub fn find(&self, canonical_id: &str) -> Option<&Card> {
         self.cards.iter().find(|c| c.canonical_id == canonical_id)
     }
 
@@ -244,6 +327,8 @@ pub fn validate(cards: Vec<Card>) -> Result<Vec<Card>, String> {
         }
         let color = normalize_color(&card.color)?;
         let image = card.image.clone().filter(|u| is_image_url(u));
+        let reveal_image = card.reveal_image.clone().filter(|u| is_image_url(u));
+        let fixed = card.fixed && reveal_image.is_some();
         let role = if card.legacy_trick && card.role == Role::Normal {
             Role::Trick
         } else {
@@ -255,6 +340,8 @@ pub fn validate(cards: Vec<Card>) -> Result<Vec<Card>, String> {
             aliases,
             color,
             image,
+            reveal_image,
+            fixed,
             role,
             legacy_trick: false,
             allowed,
@@ -307,6 +394,8 @@ mod tests {
             legacy_trick: false,
             allowed: false,
             image: None,
+            reveal_image: None,
+            fixed: false,
             away: false,
         }
     }
@@ -499,6 +588,79 @@ mod tests {
             ImageError::TooLarge
         );
         assert!(reg.cards()[0].image.is_none());
+    }
+
+    #[test]
+    fn a_trick_badge_can_hold_its_real_photo_and_fix_and_reset_swap_it_in_and_out() {
+        let mut reg = temp_registry("reveal");
+        let mut unicorn = card("04976400092289", &[], "🦄");
+        unicorn.role = Role::Trick;
+        reg.replace(vec![unicorn]).unwrap();
+        reg.set_image("04976400092289", PNG, 1).unwrap(); // the raccoon: the trick
+        let with_real = reg.set_reveal_image("04976400092289", PNG, 2).unwrap();
+        assert_eq!(
+            with_real.image.as_deref(),
+            Some("/images/04976400092289.png?v=1")
+        );
+        assert_eq!(
+            with_real.reveal_image.as_deref(),
+            Some("/images/04976400092289-real.png?v=2")
+        );
+        assert!(reg.images_dir().join("04976400092289-real.png").exists());
+
+        let fixed = reg.fix("04976400092289").unwrap();
+        assert!(fixed.fixed);
+        assert_eq!(
+            fixed.image.as_deref(),
+            Some("/images/04976400092289-real.png?v=2"),
+            "the real photo shows"
+        );
+        assert_eq!(
+            fixed.reveal_image.as_deref(),
+            Some("/images/04976400092289.png?v=1")
+        );
+        assert_eq!(
+            reg.fix("04976400092289").unwrap(),
+            fixed,
+            "fixing twice changes nothing"
+        );
+
+        // Editing the card from the phone (which doesn't send these fields) keeps them.
+        let mut edited = card("04976400092289", &[], "🦄");
+        edited.role = Role::Trick;
+        let kept = reg.upsert(edited).unwrap();
+        assert!(kept.fixed);
+        assert_eq!(kept.image, fixed.image);
+        assert_eq!(kept.reveal_image, fixed.reveal_image);
+
+        reg.unfix_all().unwrap();
+        let back = reg.find("04976400092289").unwrap();
+        assert!(!back.fixed);
+        assert_eq!(
+            back.image.as_deref(),
+            Some("/images/04976400092289.png?v=1"),
+            "reset brings the trick back"
+        );
+        assert_eq!(
+            back.reveal_image.as_deref(),
+            Some("/images/04976400092289-real.png?v=2")
+        );
+    }
+
+    #[test]
+    fn fixing_needs_a_real_photo() {
+        let mut reg = temp_registry("reveal-missing");
+        reg.replace(vec![card("04976400092289", &[], "🦄")])
+            .unwrap();
+        assert!(reg.fix("04976400092289").is_err());
+        assert!(reg.fix("04DEADBEEF0000").is_err());
+    }
+
+    #[test]
+    fn real_photo_urls_are_allowed_but_only_ours() {
+        assert!(is_image_url("/images/04976400092289-real.png?v=2"));
+        assert!(!is_image_url("/images/04976400092289-fake.png?v=2"));
+        assert!(!is_image_url("/images/../x-real.png?v=2"));
     }
 
     #[test]

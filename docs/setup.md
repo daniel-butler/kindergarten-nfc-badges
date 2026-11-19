@@ -57,7 +57,8 @@ About 20 seconds per badge:
 3. Type the animal's name, tap its cardstock color, pick its role (Normal / 🎭 Trick / ⭐ Golden),
    and tap **Save**. The photo shows up on the projector right away.
 4. A badge that's already registered shows **📸 Retake photo**, **✏️ Edit** and
-   **💤 Not here today**.
+   **💤 Not here today**. A 🎭 trick badge also shows **📸 Real photo (for the reveal)**: snap the
+   sticker it *should* show, and Check in can swap it in with one tap after you keep it out.
 
 You can also register in the projector's **⌥1 Setup** scene (emoji instead of photos).
 
