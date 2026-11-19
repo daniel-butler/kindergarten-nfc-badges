@@ -155,6 +155,20 @@ test.describe('Debug and presenter panel', () => {
     await expect(page.locator('#panel')).toContainText(`Version ${version}`);
   });
 
+  test('the panel asks for the version each time it opens (a restarted server has a new one)', async ({ page }) => {
+    let n = 0;
+    await page.route('**/api/version', (route) => {
+      n += 1;
+      return route.fulfill({ json: { version: n === 1 ? 'aaaaaaa' : 'bbbbbbb', date: 'Nov 19 07:00' } });
+    });
+    await openScene(page, 'zoo');
+    await page.keyboard.press('Alt+p');
+    await expect(page.locator('#panel')).toContainText('Version aaaaaaa (Nov 19 07:00)');
+    await page.keyboard.press('Alt+p');
+    await page.keyboard.press('Alt+p');
+    await expect(page.locator('#panel')).toContainText('Version bbbbbbb');
+  });
+
   test('panel shows the last unknown badge and has the zoo command buttons', async ({ page, request }) => {
     await setCards(request, [PENGUIN, LION, FOX_TRICK]);
     await command(request, 'reset');

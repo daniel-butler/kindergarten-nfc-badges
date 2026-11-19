@@ -22,4 +22,7 @@ fn main() {
     println!("cargo:rerun-if-changed=../.git/HEAD");
     println!("cargo:rerun-if-changed=../.git/refs/heads");
     println!("cargo:rerun-if-changed=../.git/index");
+    // Edits not yet staged change none of those: watch the sources too, for "+changes".
+    println!("cargo:rerun-if-changed=src");
+    println!("cargo:rerun-if-changed=static");
 }

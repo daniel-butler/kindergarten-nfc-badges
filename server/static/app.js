@@ -610,7 +610,7 @@ const Panel = (() => {
 
   function toggle() {
     panel.hidden = !panel.hidden;
-    if (!panel.hidden && !version) loadVersion();
+    if (!panel.hidden) loadVersion(); // every time: the server may have been restarted with a new build
     render();
   }
 
@@ -628,7 +628,8 @@ const Panel = (() => {
     if (panel.hidden) return;
     const current = Badge.current;
     panel.replaceChildren(...[
-      el('div', { class: 'version' }, version ? `Version ${version.version} (${version.date})` : 'Version …'),
+      el('div', { class: 'version' },
+        version ? `Version ${version.version}${version.date ? ` (${version.date})` : ''}` : 'Version …'),
       el('h2', {}, 'Scenes'),
       ...Badge.scenes.map((s) => button(s.name, `⌥${s.key}`, () => Badge.show(s.id), s === current)),
       el('h2', {}, 'Controls'),
