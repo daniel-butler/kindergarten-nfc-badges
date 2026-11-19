@@ -118,7 +118,7 @@ test('Allow special from the phone opens the Zoo List; the special then starts t
   await expect(page.locator(`.zoo-list-new[data-id="${STAR_SPECIAL.canonical_id}"]`)).toBeVisible({ timeout: 20000 });
   await page.waitForTimeout(1600); // same badge again within 1.5 s is ignored as a repeat
   await phoneTap(request, STAR_SPECIAL.canonical_id);
-  await expect(page.locator('.zoo3d-finale')).toContainText('Congratulations, Official Zookeepers!', { timeout: 20000 });
+  await expect(page.locator('.zoo3d-finale')).toContainText('Congratulations!', { timeout: 20000 });
 });
 
 test('Reset from the phone empties the zoo', async ({ page, request }) => {
@@ -188,5 +188,5 @@ test('scanning the special badge on Check in: Allow right there, and its next ta
   await expect(page.locator(`.zoo-list-new[data-id="${STAR_SPECIAL.canonical_id}"]`)).toBeVisible({ timeout: 20000 });
   await page.waitForTimeout(1600);
   await phoneTap(request, STAR_SPECIAL.canonical_id);
-  await expect(page.locator('.zoo3d-finale')).toContainText('Congratulations, Official Zookeepers!', { timeout: 20000 });
+  await expect(page.locator('.zoo3d-finale')).toContainText('Congratulations!', { timeout: 20000 });
 });

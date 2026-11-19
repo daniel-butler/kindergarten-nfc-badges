@@ -88,7 +88,7 @@ test.describe('Zoo Gate (backup, ⌥6)', () => {
     await page.waitForTimeout(1600); // same badge again within 1.5 s counts as a repeat
     await phoneTap(request, STAR_SPECIAL.canonical_id);
     await expect(tally(page, 1)).toBeVisible();
-    await expect(scene(page)).toContainText('Congratulations, Official Zookeepers!', { timeout: 20000 });
+    await expect(scene(page)).toContainText('Congratulations!', { timeout: 20000 });
   });
 
   test('Option+S opens the gate, parades, and congratulates', async ({ page, request }) => {
@@ -96,7 +96,7 @@ test.describe('Zoo Gate (backup, ⌥6)', () => {
     await phoneTap(request, PENGUIN.canonical_id);
     await page.keyboard.press('Alt+s');
     await expect(page.locator('.zoo-gate')).toHaveClass(/open/, { timeout: 5000 });
-    await expect(scene(page)).toContainText('Congratulations, Official Zookeepers!', { timeout: 15000 });
+    await expect(scene(page)).toContainText('Congratulations!', { timeout: 15000 });
   });
 
   test('check-ins survive reload; Option+R twice resets', async ({ page, request }) => {

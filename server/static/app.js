@@ -1491,8 +1491,7 @@ Badge.registerScene((() => {
   function showFinale(celebrate) {
     root.className = 'scene scene-zoo scene-gate finale';
     root.replaceChildren(el('div', { class: 'zoo-finale' },
-      el('div', { class: 'huge-emoji-sm pop' }, '🏆'),
-      el('div', { class: 'title finale-title pop' }, 'Congratulations, Official Zookeepers!'),
+      el('div', { class: 'title finale-title pop' }, 'Congratulations!'),
       el('div', { class: 'finale-animals' }, present().map((c) => ring(c, 10)))));
     if (celebrate) {
       Sound.fanfare();
@@ -2617,8 +2616,7 @@ Badge.registerScene((() => {
   function showTitle() {
     root.querySelector('.zoo3d-finale')?.remove();
     root.append(el('div', { class: 'zoo3d-finale' },
-      el('div', { class: 'huge-emoji-sm pop' }, '🏆'),
-      el('div', { class: 'title finale-title pop' }, 'Congratulations, Official Zookeepers!')));
+      el('div', { class: 'title finale-title pop' }, 'Congratulations!')));
   }
 
   // ---------- render loop ----------

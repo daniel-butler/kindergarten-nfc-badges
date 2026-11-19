@@ -94,7 +94,7 @@ test('the party: balloons rise and the goose dances before the title shows', asy
   await expect.poll(async () => (await zooState(page)).models.balloons).toBeGreaterThan(0);
   expect((await zooState(page)).gatekeeper).toBe('dancing');
   await expect(page.locator('.zoo3d-finale')).toHaveCount(0);
-  await expect(page.locator('.zoo3d-finale')).toContainText('Congratulations, Official Zookeepers!', { timeout: 10000 });
+  await expect(page.locator('.zoo3d-finale')).toContainText('Congratulations!', { timeout: 10000 });
 });
 
 test('a new sticker photo arriving while that animal walks in: it still ends up playing, not stuck in the ground', async ({ page, request }) => {
@@ -165,13 +165,13 @@ test('the gatekeeper goose stands at the gate as a 3D model, with no padlock yet
 test('Option+S starts the party', async ({ page }) => {
   await openScene(page, 'zoo', 4);
   await page.keyboard.press('Alt+s');
-  await expect(page.locator('.zoo3d-finale')).toContainText('Congratulations, Official Zookeepers!', { timeout: 10000 });
+  await expect(page.locator('.zoo3d-finale')).toContainText('Congratulations!', { timeout: 10000 });
 });
 
 test('the party command from the phone starts the party', async ({ page, request }) => {
   await openScene(page, 'zoo', 4);
   await command(request, 'party');
-  await expect(page.locator('.zoo3d-finale')).toContainText('Congratulations, Official Zookeepers!', { timeout: 10000 });
+  await expect(page.locator('.zoo3d-finale')).toContainText('Congratulations!', { timeout: 10000 });
 });
 
 test('Option+R twice resets tally, check-ins and party; once does nothing', async ({ page, request }) => {
@@ -414,7 +414,7 @@ test.describe('special badge finale', () => {
     await tapStar(request);
     await expect(page.locator('.zoo-list')).toHaveCount(0);
     await expect(tally(page, 2)).toBeVisible();
-    await expect(page.locator('.zoo3d-finale')).toContainText('Congratulations, Official Zookeepers!', { timeout: 20000 });
+    await expect(page.locator('.zoo3d-finale')).toContainText('Congratulations!', { timeout: 20000 });
     expect(await inside(page)).toContain(STAR_SPECIAL.canonical_id);
   });
 

@@ -104,7 +104,7 @@ card.
     the party any time.
 - **🎉 Party:** balloons float up, everyone dances in a ring with the goose in the middle (the
   golden badge animal puts on a 🤿 snorkel and bounces around), then
-  "Congratulations, Official Zookeepers!" appears.
+  "Congratulations!" appears.
 - **Saved:** check-ins survive a page reload. **⌥R ⌥R**, or Reset on the phone, clears everything
   and denies the golden badge again.
 
