@@ -636,7 +636,7 @@ const Panel = (() => {
       button('📋 Zoo List', '⌥L', () => Commands.send('toggle-list')),
       button('👍 Let in', '⌥Y', () => Commands.send('let-in')),
       button('👎 Keep out', '⌥N', () => Commands.send('keep-out')),
-      button('⭐ Allow special', '⌥A', () => Commands.send('allow-special')),
+      button('⭐ Allow golden', '⌥A', () => Commands.send('allow-special')),
       button(performance.now() < resetArmedUntil ? '⚠️ Click again to reset' : '🔄 Reset the zoo', '⌥R ⌥R', requestReset),
       el('h2', {}, 'Status'),
       el('div', {}, `${Badge.connected ? '🟢 Connected' : '🔴 Disconnected'} · ${Badge.cards.length} cards`),
@@ -727,8 +727,9 @@ Badge.registerScene((() => {
   let choice;
 
   const emptyChoice = () => ({ emoji: null, label: null, color: null, role: 'normal' });
-  const ROLES = [['normal', 'Normal'], ['trick', '🎭 Trick'], ['special', '⭐ Special']];
-  const ROLE_NOTE = { trick: ' · 🎭 trick badge', special: ' · ⭐ special badge' };
+  // Out loud it's the "golden badge": "special sticker" means the NFC sticker in the lesson.
+  const ROLES = [['normal', 'Normal'], ['trick', '🎭 Trick'], ['special', '⭐ Golden']];
+  const ROLE_NOTE = { trick: ' · 🎭 trick badge', special: ' · ⭐ golden badge' };
 
   function header() {
     const n = Badge.cards.length;
@@ -1805,6 +1806,7 @@ Badge.registerScene((() => {
   const LOCK_SIZE = 1.4;
   const VISIT_MS = 2800; // an animal already inside runs to the gate and waves this long
   const TITLE_AFTER_MS = 1500; // the party title waits for the balloons
+  const CALM_AFTER_MS = 15000; // no taps for this long: everyone sits still while the presenter talks
   const BALLOONS = 16;
   const PARTY_COLORS = ['#ff5d8f', '#ffd43b', '#4dabf7', '#69db7c', '#b197fc', '#ff922b'];
 
@@ -1818,6 +1820,8 @@ Badge.registerScene((() => {
   let gatekeeper = 'idle'; // the goose: 'idle', 'curious' (trick vote), 'bye' (kept out), 'no' (special denied)
   let voteDecided = null; // resolves the trick vote waiting at the gate
   let raising = false; // the goose is lifting its clipboard
+  let lastActivity = performance.now(); // last tap or command; long enough ago means calm
+  let calm = false;
   let visitor = null; // canonical_id of a sticker turned away at the gate
   let generation = 0;
   let hud;
@@ -2589,7 +2593,8 @@ Badge.registerScene((() => {
         t.done();
       }
     }
-    if (now > w.reassignAt) {
+    calm = !finale && !busy && !queue.length && gatekeeper === 'idle' && now - lastActivity > CALM_AFTER_MS;
+    if (now > w.reassignAt && !calm) {
       assignStations();
       w.reassignAt = now + REASSIGN_MS;
     }
@@ -2605,9 +2610,15 @@ Badge.registerScene((() => {
         } else if (finale) {
           const ang = (i / all.length) * Math.PI * 2 + secs * 0.4;
           target = V(Math.cos(ang) * 6, Math.abs(Math.sin(secs * 4 + i)) * 1.2, Math.sin(ang) * 5 + 1);
+        } else if (calm) {
+          // Everyone strolls to a spot on the grass and sits still.
+          const ang = (i / all.length) * Math.PI * 2;
+          const r = 4.5 + (i % 2) * 2.5;
+          target = V(Math.cos(ang) * r, 0, Math.sin(ang) * r + 1);
         } else target = (a.station || w.stations.at(-1)).pos(a.slot, secs);
         const goal = target.clone().setY(target.y + ANIMAL_H / 2);
-        a.sprite.position.lerp(goal, visiting ? 0.12 : a.station?.name === 'grass' || finale ? 0.08 : 0.25);
+        const ease = visiting ? 0.12 : calm ? 0.03 : a.station?.name === 'grass' || finale ? 0.08 : 0.25;
+        a.sprite.position.lerp(goal, ease);
         const since = now - a.bounceAt;
         if (since < 900) a.sprite.position.y += Math.abs(Math.sin((since / 900) * Math.PI * 2)) * 1.4;
       }
@@ -2616,7 +2627,8 @@ Badge.registerScene((() => {
     const g = w.goose;
     if (gatekeeper === 'idle') {
       g.goose.rotation.y += (GOOSE_IDLE_TURN - g.goose.rotation.y) * 0.05;
-      g.head.rotation.x = Math.sin(secs * 1.6) * 0.12; // little nods while it keeps watch
+      // Little nods while it keeps watch; still when the zoo is calm.
+      g.head.rotation.x = calm ? g.head.rotation.x * 0.9 : Math.sin(secs * 1.6) * 0.12;
     } else if (gatekeeper === 'dancing') {
       g.goose.position.lerp(V(0, Math.abs(Math.sin(secs * 5)) * 0.5, 1), 0.04); // into the middle of the ring
       g.goose.rotation.y += 0.05;
@@ -2740,6 +2752,7 @@ Badge.registerScene((() => {
       root = r;
       flow.clear();
       root.className = 'scene scene-zoo3d';
+      lastActivity = performance.now();
       state = ZooStore.load();
       finale = state.open;
       hud = el('div', { class: 'zoo-top zoo3d-hud' });
@@ -2768,13 +2781,20 @@ Badge.registerScene((() => {
       if (w) syncAnimals();
     },
     onSkip: () => Commands.send('party'),
-    onCommand: (action, card) => flow.command(action, card),
-    onTap: (ev) => flow.tap(ev),
+    onCommand: (action, card) => {
+      lastActivity = performance.now();
+      flow.command(action, card);
+    },
+    onTap: (ev) => {
+      lastActivity = performance.now();
+      flow.tap(ev);
+    },
     state: () => ({
       pendingVote: flow.pendingVote,
       specialDenied: gatekeeper === 'no' || queue.some((j) => j.act === 'no') || !!root.querySelector('.zoo-special-denied'),
       gatekeeper,
       visitor,
+      calm,
       models: {
         goose: !!w?.goose, padlock: !!w?.padlock.visible, clipboard: !!w?.goose.clipboard.visible,
         balloons: w ? w.balloons.length : 0,

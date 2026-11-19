@@ -108,6 +108,23 @@ test('a new sticker photo arriving while that animal walks in: it still ends up 
   expect((await zooState(page)).sprites).toBe(1);
 });
 
+test('the zoo goes calm when nobody taps for a while, and the next tap wakes it', async ({ page, request }) => {
+  test.setTimeout(60000);
+  await openScene(page, 'zoo', 4);
+  await phoneTap(request, PENGUIN.canonical_id);
+  await expect.poll(() => inside(page), { timeout: 15000 }).toContain(PENGUIN.canonical_id);
+  expect((await zooState(page)).calm).toBe(false);
+  await expect.poll(async () => (await zooState(page)).calm, { timeout: 25000 }).toBe(true);
+  // Settled: everyone sits still while the presenter talks.
+  await page.waitForTimeout(4000);
+  const before = (await zooState(page)).heights;
+  await page.waitForTimeout(1500);
+  const after = (await zooState(page)).heights;
+  expect(Math.abs(after[PENGUIN.canonical_id] - before[PENGUIN.canonical_id])).toBeLessThan(0.01);
+  await phoneTap(request, LION.canonical_id);
+  await expect.poll(async () => (await zooState(page)).calm).toBe(false);
+});
+
 test('a not-here-today kid who taps goes in and adds a mark', async ({ page, request }) => {
   await openScene(page, 'zoo', 4);
   await phoneTap(request, OWL_AWAY.canonical_id);
@@ -426,6 +443,21 @@ test.describe('special badge finale', () => {
     await expect(page.locator('.zoo-list')).toBeVisible();
     await page.keyboard.press('Alt+l');
     await expect(page.locator('.zoo-list')).toHaveCount(0);
+  });
+
+  test('kids never see the word "special" from the golden badge being turned away to the party', async ({ page, request }) => {
+    await openScene(page, 'zoo', 5);
+    const visibleText = () => page.evaluate(() => document.body.innerText);
+    await tapStar(request);
+    await expect.poll(() => gatekeeper(page)).toBe('no');
+    expect(await visibleText()).not.toMatch(/special/i);
+    await command(request, 'allow-special');
+    await expect(page.locator('.zoo-list')).toBeVisible({ timeout: 15000 });
+    expect(await visibleText()).not.toMatch(/special/i);
+    await page.waitForTimeout(1600);
+    await tapStar(request);
+    await expect(page.locator('.zoo3d-finale')).toBeVisible({ timeout: 20000 });
+    expect(await visibleText()).not.toMatch(/special/i);
   });
 
   test('reset sends the special back to denied', async ({ page, request }) => {

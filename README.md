@@ -5,7 +5,7 @@
 A kindergarten activity with NFC badges. Each kid gets a cardstock badge with a tiny NFC sticker
 hidden under a cute animal sticker. They tap it on a reader, their animal walks through the zoo
 gate on the projector, and joins its friends on the playground. Trick badges get a class vote, a
-special badge gets turned away until the very end, and everyone ends at a party.
+golden badge gets turned away until the very end, and everyone ends at a party.
 
 ![Everyone's in: the playground party with the kids' sticker animals](docs/images/party.jpg)
 
@@ -17,8 +17,8 @@ special badge gets turned away until the very end, and everyone ends at a party.
 | **Tap in.** Your own animal (a photo of *your* sticker) arrives at the gate with confetti in your badge's color. | **Play.** Everyone who's in plays on the slide, swings, seesaw and merry-go-round. Tally marks count who's here. |
 | ![Trick badge vote: let it in or keep it out](docs/images/trick-vote.jpg) | ![The gatekeeper goose waves a trick badge bye-bye](docs/images/goose.jpg) |
 | **Trick badges.** Is that really the right animal and color? Thumbs up or down! | **Keep out?** The gatekeeper goose honks and waves it bye-bye. |
-| ![The special badge is denied at the gate](docs/images/special-denied.jpg) | ![The Zoo List with the special badge being scribbled in](docs/images/zoo-list.jpg) |
-| **The special badge** isn't on the list… the padlock pops on and the goose says no. | **Add it to the Zoo List**, tap again, and the party starts. |
+| ![The golden badge is denied at the gate](docs/images/special-denied.jpg) | ![The Zoo List with the golden badge being scribbled in](docs/images/zoo-list.jpg) |
+| **The golden badge** isn't on the list… the padlock pops on and the goose says no. | **Add it to the Zoo List**, tap again, and the party starts. |
 
 Unknown badges get a gentle "Oops! Tap again 🔄" (no red, no buzzer). There's also a
 **Secret Number** scene that reveals the number hidden inside a badge, **The List** that shows
@@ -35,7 +35,7 @@ the computer looking it up, and a **Who has the 🐼?** game.
 - **A Mac** runs everything offline and drives the projector.
 - **A USB badge reader** and/or **an iPhone** read the badges.
 - **Zookeeper**, the iPhone app, registers badges (it photographs each sticker and cuts it out
-  automatically) and is your **remote**: Let in / Keep out, Allow special, Zoo List, Party,
+  automatically) and is your **remote**: Let in / Keep out, Allow golden, Zoo List, Party,
   scene switching, and a Help sheet with every Mac shortcut as a fallback.
 
 Everything runs locally: the Mac joins the iPhone's hotspot, and no internet is needed.

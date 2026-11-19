@@ -57,7 +57,7 @@ list where one badge would match two cards is rejected loudly.
 cd server && cargo test                              # ID matching, registry, roles, presenter state
 cd e2e && npm install && npm run install-browser     # once
 cd e2e && npm test                                   # starts a server on :8181 with a fresh cards file
-cd ios && swiftc ClassroomZoo/TapClient.swift ClassroomZoo/StickerEdges.swift Tests/*.swift -o /tmp/tapcheck && /tmp/tapcheck
+cd ios && swiftc ClassroomZoo/TapClient.swift ClassroomZoo/StickerEdges.swift ClassroomZoo/ScanPolicy.swift Tests/*.swift -o /tmp/tapcheck && /tmp/tapcheck
 BADGE_SCRATCH_SERVER=localhost:8181 /tmp/tapcheck    # also talks to a THROWAWAY server (it adds a test badge)
 ```
 

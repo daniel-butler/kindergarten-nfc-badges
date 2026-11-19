@@ -54,9 +54,9 @@ final class ClassroomZooUITests: XCTestCase {
 
     func testPresenterAllowsSpecial() {
         let app = launch(mode: "Presenter")
-        XCTAssert(text(app, "⭐ Special badge waiting").waitForExistence(timeout: wait))
+        XCTAssert(text(app, "⭐ Golden badge waiting").waitForExistence(timeout: wait))
         XCTAssert(text(app, expected).exists, "waiting card shows \(expected)")
-        app.buttons["⭐ Allow special"].tap()
+        app.buttons["⭐ Allow golden"].tap()
         XCTAssert(text(app, "✓ Sent: allow-special").waitForExistence(timeout: wait))
     }
 
@@ -115,7 +115,7 @@ final class ClassroomZooUITests: XCTestCase {
     func testCheckInAllowsSpecial() {
         let app = launch(mode: "Check in")
         app.buttons["Start Scanning"].tap()
-        XCTAssert(text(app, "⭐ Special badge").waitForExistence(timeout: wait))
+        XCTAssert(text(app, "⭐ Golden badge").waitForExistence(timeout: wait))
         XCTAssert(app.buttons["Not yet"].exists)
         app.buttons["⭐ Allow"].tap()
         let gone = NSPredicate(format: "exists == false")

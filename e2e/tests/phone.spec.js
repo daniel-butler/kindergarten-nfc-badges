@@ -80,6 +80,7 @@ test('a badge read by the phone walks into the zoo on the projector', async ({ p
   const phoneLines = logLines().filter((l) => l.includes('[phone]'));
   expect(phoneLines.some((l) => /app active/.test(l))).toBe(true);
   expect(phoneLines.some((l) => new RegExp(`badge read ${PENGUIN.canonical_id}`).test(l))).toBe(true);
+  expect(phoneLines.some((l) => /screen stays awake on Check in/.test(l))).toBe(true);
   await expect.poll(() => inside(page), { timeout: 15000 }).toContain(PENGUIN.canonical_id);
 });
 
@@ -101,10 +102,11 @@ test('Keep out from the phone sends the trick badge away with the goose', async 
   await phone('testPresenterKeepsOutTrick');
   await expect(page.locator('.zoo-vote')).toHaveCount(0);
   await expect(tally(page, 0)).toBeVisible();
-  // The goose only waves for a moment; tapping the kept-out badge again brings it back, not a new vote.
+  await expect.poll(async () => (await zooState(page)).inside).toEqual([]);
+  // Kept out isn't final: the badge's next tap gets a new vote.
   await phoneTap(request, FOX_TRICK.canonical_id);
-  await expect.poll(async () => (await zooState(page)).gatekeeper).toBe('bye');
-  await expect(page.locator('.zoo-vote')).toHaveCount(0);
+  await expect(page.locator('.zoo-vote')).toBeVisible({ timeout: 15000 });
+  expect((await zooState(page)).pendingVote).toBe(FOX_TRICK.canonical_id);
 });
 
 test('Allow special from the phone opens the Zoo List; the special then starts the party', async ({ page, request }) => {
@@ -143,9 +145,14 @@ test('reopening the app with the Mac unreachable: it says so, and Reconnect gets
   const r = relay();
   const port = await r.start();
   r.down();
-  setTimeout(() => r.up(), 15000); // the Mac comes back while the app is showing it can't reach it
+  const running = phone('testReconnectsWhenTheMacComesBack', { server: `http://localhost:${port}` });
   try {
-    await phone('testReconnectsWhenTheMacComesBack', { server: `http://localhost:${port}` });
+    // The Mac comes back only once the app has tried it (launching the app can take a while on CI),
+    // with time for the app to show that it can't reach it.
+    await expect.poll(() => r.refused, { timeout: 120000 }).toBeGreaterThan(0);
+    await new Promise((ok) => setTimeout(ok, 5000));
+    r.up();
+    await running;
   } finally {
     await r.stop();
   }

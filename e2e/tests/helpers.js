@@ -94,8 +94,12 @@ module.exports.logLines = logLines;
 function relay() {
   const sockets = new Set();
   let refusing = false;
+  let refused = 0;
   const server = require('node:net').createServer((client) => {
-    if (refusing) return client.destroy();
+    if (refusing) {
+      refused += 1;
+      return client.destroy();
+    }
     const upstream = require('node:net').connect(8181, '127.0.0.1');
     for (const s of [client, upstream]) {
       sockets.add(s);
@@ -111,6 +115,8 @@ function relay() {
     cut: () => sockets.forEach((s) => s.destroy()),
     down() { refusing = true; this.cut(); },
     up() { refusing = false; },
+    /** Connections turned away while down. */
+    get refused() { return refused; },
     stop: () => new Promise((ok) => { sockets.forEach((s) => s.destroy()); server.close(ok); }),
   };
 }

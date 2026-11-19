@@ -54,7 +54,7 @@ About 20 seconds per badge:
 2. For a new badge, the camera opens. Snap the sticker straight on. The app lifts it off the
    cardstock and tidies the edges: leftover bits of the old white border are removed, and an even
    white die-cut border is drawn around the drawing's dark outline. **Retake** if it looks wrong.
-3. Type the animal's name, tap its cardstock color, pick its role (Normal / 🎭 Trick / ⭐ Special),
+3. Type the animal's name, tap its cardstock color, pick its role (Normal / 🎭 Trick / ⭐ Golden),
    and tap **Save**. The photo shows up on the projector right away.
 4. A badge that's already registered shows **📸 Retake photo**, **✏️ Edit** and
    **💤 Not here today**.
@@ -70,8 +70,9 @@ phone, then on the reader within 5 seconds: the reader's ID gets linked to that 
 ## Check in mode (Zookeeper → Check in)
 
 Tap **Start Scanning** and hold badges to the phone one after another. Each read buzzes, sends the
-tap, shows the animal, and keeps scanning. iOS ends an NFC session after about a minute; tap Start
-again. A badge left on the phone isn't re-sent within 2 seconds.
+tap, shows the animal, and keeps scanning. iOS ends an NFC session after about a minute; Zookeeper
+starts a new one by itself until you tap **Stop** (or Cancel on the scan sheet). The screen stays
+awake while you're on Check in. A badge left on the phone isn't re-sent within 2 seconds.
 
 ## Logs on the phone
 

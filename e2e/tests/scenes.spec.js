@@ -89,7 +89,7 @@ test.describe('Setup', () => {
     await page.locator('.mini-card[title=Owl]').click();
     await page.locator('button.role[data-role=special]').click();
     await page.locator('button', { hasText: 'Save' }).click();
-    await expect(scene(page)).toContainText('special badge');
+    await expect(scene(page)).toContainText('golden badge');
     await page.locator('button', { hasText: 'Done' }).click();
     await expect(page.locator('.mini-card.role-special')).toHaveCount(1);
     await expect(page.locator('.count-pill')).toContainText('1 ⭐');
@@ -137,7 +137,7 @@ test.describe('Debug and presenter panel', () => {
     await page.keyboard.press('Alt+p');
     const panel = page.locator('#panel');
     await expect(panel).toContainText('Last unknown: DEADBEEF');
-    for (const label of ['📋 Zoo List', '👍 Let in', '👎 Keep out', '⭐ Allow special', '🔄 Reset the zoo']) {
+    for (const label of ['📋 Zoo List', '👍 Let in', '👎 Keep out', '⭐ Allow golden', '🔄 Reset the zoo']) {
       await expect(panel.locator('button', { hasText: label })).toHaveCount(1);
     }
     await page.waitForTimeout(1600);

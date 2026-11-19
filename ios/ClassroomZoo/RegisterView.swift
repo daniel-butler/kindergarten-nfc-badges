@@ -212,7 +212,7 @@ struct RegisterView: View {
             Picker("Role", selection: $role) {
                 Text("Normal").tag("normal")
                 Text("🎭 Trick").tag("trick")
-                Text("⭐ Special").tag("special")
+                Text("⭐ Golden").tag("special")
             }
             .pickerStyle(.segmented)
             bigButton("💾 Save", tint: .green) { save(id: id, existing: existing) }
