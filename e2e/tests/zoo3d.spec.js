@@ -443,6 +443,8 @@ test.describe('special badge finale', () => {
 
   test('at the party the golden badge animal wears a snorkel and bounces around', async ({ page, request }) => {
     await openScene(page, 'zoo', 5);
+    await phoneTap(request, PENGUIN.canonical_id); // someone to dance with
+    await expect.poll(() => inside(page), { timeout: 20000 }).toContain(PENGUIN.canonical_id);
     await command(request, 'allow-special');
     await expect(page.locator('.zoo-list')).toBeVisible({ timeout: 15000 });
     expect((await zooState(page)).snorkel).toBe(null);
@@ -461,6 +463,7 @@ test.describe('special badge finale', () => {
       return Math.max(...hs) - Math.min(...hs);
     };
     const others = Object.keys(samples[0]).filter((id) => id !== STAR_SPECIAL.canonical_id);
+    expect(others).toContain(PENGUIN.canonical_id);
     const golden = range(STAR_SPECIAL.canonical_id);
     expect(golden).toBeGreaterThan(0.3);
     expect(golden).toBeGreaterThan(Math.max(...others.map(range)));
