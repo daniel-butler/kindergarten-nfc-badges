@@ -73,7 +73,10 @@ final class ClassroomZooUITests: XCTestCase {
 
     func testShowsConnectedToTheMac() {
         let app = launch(mode: "Check in")
-        XCTAssert(label(app, startingWith: "🟢 Connected").waitForExistence(timeout: wait))
+        let status = label(app, startingWith: "🟢 Connected")
+        XCTAssert(status.waitForExistence(timeout: wait))
+        XCTAssert(status.label.contains("· server "), "shows which server version: \(status.label)")
+        XCTAssert(label(app, startingWith: "Built ").exists, "shows when this app was built")
     }
 
     /// The Mac is unreachable at first (the Playwright side brings it back after a while):

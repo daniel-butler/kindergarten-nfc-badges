@@ -592,6 +592,16 @@ const Reader = (() => {
 
 const Panel = (() => {
   const panel = $('#panel');
+  let version = null; // which server build this page came from
+
+  async function loadVersion() {
+    try {
+      version = await (await fetch('/api/version')).json();
+      render();
+    } catch {
+      /* shown once the server answers */
+    }
+  }
 
   function fullscreen() {
     if (document.fullscreenElement) document.exitFullscreen();
@@ -600,6 +610,7 @@ const Panel = (() => {
 
   function toggle() {
     panel.hidden = !panel.hidden;
+    if (!panel.hidden && !version) loadVersion();
     render();
   }
 
@@ -617,6 +628,7 @@ const Panel = (() => {
     if (panel.hidden) return;
     const current = Badge.current;
     panel.replaceChildren(...[
+      el('div', { class: 'version' }, version ? `Version ${version.version} (${version.date})` : 'Version …'),
       el('h2', {}, 'Scenes'),
       ...Badge.scenes.map((s) => button(s.name, `⌥${s.key}`, () => Badge.show(s.id), s === current)),
       el('h2', {}, 'Controls'),

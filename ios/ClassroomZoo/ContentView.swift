@@ -8,16 +8,26 @@ struct ContentView: View {
     @AppStorage("mode") private var mode = Mode.checkIn
     @Environment(\.scenePhase) private var phase
 
+    /// When this copy of the app was built, so you can tell a fresh install from an old one.
+    private static let built: String = {
+        guard let url = Bundle.main.executableURL,
+              let date = (try? FileManager.default.attributesOfItem(atPath: url.path))?[.modificationDate] as? Date
+        else { return "Built ?" }
+        let f = DateFormatter()
+        f.dateFormat = "MMM d, h:mm a"
+        return "Built \(f.string(from: date))"
+    }()
+
     /// Whether the Mac's server answered the last check.
     private enum Link: Equatable {
         case checking
-        case up(badges: Int)
+        case up(badges: Int, version: String?)
         case down(String)
 
         var text: String {
             switch self {
             case .checking: "Checking the Mac…"
-            case .up(let badges): "🟢 Connected · \(badges) badges"
+            case .up(let badges, let version): "🟢 Connected · \(badges) badges · server \(version ?? "(old)")"
             case .down(let reason): "🔴 Can't reach the Mac: \(reason)"
             }
         }
@@ -38,8 +48,13 @@ struct ContentView: View {
                         .scaledToFit()
                         .frame(height: 64)
                         .accessibilityHidden(true)
-                    Text("Zookeeper")
-                        .font(.largeTitle.bold())
+                    VStack(alignment: .leading, spacing: 0) {
+                        Text("Zookeeper")
+                            .font(.largeTitle.bold())
+                        Text(Self.built)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
                     Spacer()
                     Button { showLogs = true } label: {
                         Label("Logs", systemImage: "doc.text")
@@ -207,7 +222,7 @@ struct ContentView: View {
     private func checkLink(logEvenIfSame: Bool = false) async {
         let next: Link
         switch await TapClient.ping(server: serverURL) {
-        case .success(let badges): next = .up(badges: badges)
+        case .success(let reply): next = .up(badges: reply.badges, version: reply.version)
         case .failure(let error): next = .down(error.localizedDescription)
         }
         let wasUp = if case .up = link { true } else { false }

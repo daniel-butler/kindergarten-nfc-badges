@@ -39,6 +39,13 @@ check(unicorn.fixed == true && unicorn.reveal_image == "/images/04CA.png?v=1", "
 let plain = String(data: try! JSONEncoder().encode(CardDTO(canonical_id: "04CA", emoji: "🦄", label: "Unicorn", color: ColorDTO(hex: "#43A047", name: "Green"))), encoding: .utf8)!
 check(!plain.contains("reveal_image") && !plain.contains("fixed"), "a card without them doesn't send them: \(plain)")
 
+// The server stamps every response with its version; the phone shows it next to "Connected".
+let stamped = HTTPURLResponse(url: URL(string: "http://mac:8080/api/cards")!, statusCode: 200, httpVersion: nil,
+                              headerFields: ["X-Badge-Version": "0a1fc72"])!
+check(TapClient.serverVersion(from: stamped) == "0a1fc72", "reads the server's version")
+check(TapClient.serverVersion(from: HTTPURLResponse(url: URL(string: "http://mac:8080")!, statusCode: 200, httpVersion: nil, headerFields: [:])!) == nil,
+      "an older server has no version")
+
 let logBody = try! JSONSerialization.jsonObject(with: TapClient.logBody(lines: ["10:15:59.123 app active"])) as! [String: Any]
 check(logBody["source"] as? String == "phone" && logBody["lines"] as? [String] == ["10:15:59.123 app active"],
       "log body matches the server's /api/log")
